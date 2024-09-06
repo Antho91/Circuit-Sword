@@ -217,19 +217,6 @@ execute "cp $BINDIR/bt-driver/rtlbt_* $DEST/lib/firmware/rtl_bt/"
 execute "sed -i \"s/dev-serial1.device/dev-ttyAMA0.device/\" $DEST/lib/systemd/system/hciuart.service"
 
 # Install python-serial
-<<<<<<< HEAD
-execute "dpkg -x $BINDIR/settings/python-serial_2.6-1.1_all.deb $DEST/"
-
-# Install rfkill
-execute "dpkg -x $BINDIR/settings/rfkill_0.5-1_armhf.deb $DEST/"
-
-# Install avrdude
-execute "dpkg -x $BINDIR/settings/avrdude_6.3+r1425-1+rpt1_armhf.deb $DEST/"
-execute "dpkg -x $BINDIR/settings/libftdi1_0.20-4_armhf.deb $DEST/"
-
-# Install wiringPi
-execute "dpkg -x $BINDIR/settings/wiringpi_2.46_armhf.deb $DEST/"
-=======
 install "settings/deb/python-serial-asyncio-doc_0.6-4_all.deb"
 
 # Install rfkill
@@ -260,7 +247,6 @@ post-execute "dkms add -m rtl8723bs -v 4.14"
 
 # Install wiringPi
 install "settings/deb/wiringpi_3.8_armhf.deb"
->>>>>>> bookworm
 
 # Enable /ramdisk as a tmpfs (ramdisk)
 if [[ $(grep '/ramdisk' $DEST/etc/fstab) == "" ]] ; then
