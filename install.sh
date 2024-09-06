@@ -217,6 +217,7 @@ execute "cp $BINDIR/bt-driver/rtlbt_* $DEST/lib/firmware/rtl_bt/"
 execute "sed -i \"s/dev-serial1.device/dev-ttyAMA0.device/\" $DEST/lib/systemd/system/hciuart.service"
 
 # Install python-serial
+<<<<<<< HEAD
 execute "dpkg -x $BINDIR/settings/python-serial_2.6-1.1_all.deb $DEST/"
 
 # Install rfkill
@@ -228,6 +229,38 @@ execute "dpkg -x $BINDIR/settings/libftdi1_0.20-4_armhf.deb $DEST/"
 
 # Install wiringPi
 execute "dpkg -x $BINDIR/settings/wiringpi_2.46_armhf.deb $DEST/"
+=======
+install "settings/deb/python-serial-asyncio-doc_0.6-4_all.deb"
+
+# Install rfkill
+install "settings/deb/rfkill_2.38.1-5+deb12u1_armhf.deb"
+
+# Install avrdude
+# !! The following will work only with hosts that are ARM based, e.g. Macbook M1 or RaspberryPi
+# Avrdude or something connected is causing kernel panics with the latest RetroPie 4.8 if not installed but only extracted :/
+install "settings/deb/libftdi1_0.20-4+b1_armhf.deb"
+install "settings/deb/libhidapi-libusb0_0.13.1-1_armhf.deb"
+install "settings/deb/avrdude_7.1+dfsg-3_armhf.deb"
+
+# Install DKMS modules
+install "settings/deb/libapr1_1.7.2-3_armhf.deb"
+install "settings/deb/libaprutil1_1.6.3-1_armhf.deb"
+install "settings/deb/libserf-1-1_1.3.9-11_armhf.deb"
+install "settings/deb/libutf8proc2_2.8.0-1_armhf.deb"
+install "settings/deb/libsvn1_1.14.2-4+b2_armhf.deb"
+install "settings/deb/subversion_1.14.2-4+b2_armhf.deb"
+
+# Installing the deb modules means to compile for all installed kernels, which takes ages, so we only add the DKMS modules
+# post-install "sound-module/snd-usb-audio-dkms_0.1_armhf.deb"
+# post-install "wifi-module/rtl8723bs-dkms_4.14_all.deb"
+execute "dpkg -x $BINDIR/sound-module/snd-usb-audio-dkms_0.1_armhf.deb $DEST"
+execute "dpkg -x $BINDIR/wifi-module/rtl8723bs-dkms_4.14_all.deb $DEST"
+post-execute "dkms add -m snd-usb-audio -v 0.1"
+post-execute "dkms add -m rtl8723bs -v 4.14"
+
+# Install wiringPi
+install "settings/deb/wiringpi_3.8_armhf.deb"
+>>>>>>> bookworm
 
 # Enable /ramdisk as a tmpfs (ramdisk)
 if [[ $(grep '/ramdisk' $DEST/etc/fstab) == "" ]] ; then
