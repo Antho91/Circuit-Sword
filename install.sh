@@ -25,7 +25,7 @@ if [ "$EUID" -ne 0 ]
   exit 1
 fi
 
-if [ $# -lt 1 ] || [ $# -gt 4 ]; then
+if [ $# == 0 ] || [ $# == 3 ] ; then
   echo "Usage: ./<cmd> YES [branch] [fat32 root] [ext4 root]"
   exit 1
 fi
@@ -46,12 +46,10 @@ else
 fi
 
 GITHUBPROJECT="Circuit-Sword"
-GITHUBURL="https://github.com/weese/$GITHUBPROJECT"
+GITHUBURL="https://github.com/Antho91/$GITHUBPROJECT"
 PIHOMEDIR="$DEST/home/pi"
 BINDIR="$PIHOMEDIR/$GITHUBPROJECT"
-# USER="pi"
-USER=1000
-POSTINSTALL="/usr/local/sbin/post-install.sh"
+USER="pi"
 
 if [[ $2 != "" ]] ; then
   BRANCH=$2
@@ -78,60 +76,6 @@ execute() { #STRING
   fi
   
   return 0
-}
-
-post-execute() { #STRING
-  if [ $# != 1 ] ; then
-    echo "ERROR: No args passed"
-    exit 1
-  fi
-
-  if [[ $DEST != "" ]] ; then
-    if ! exists $DEST/$POSTINSTALL ; then
-      echo "#!/bin/bash" > $DEST/$POSTINSTALL
-      echo "set -e" >> $DEST/$POSTINSTALL
-      chmod a+x $DEST/$POSTINSTALL
-    fi
-    echo "$1" >> $DEST/$POSTINSTALL
-  else
-    execute "$1"
-  fi
-}
-
-install() { #STRING
-  if [ $# != 1 ] ; then
-    echo "ERROR: No args passed"
-    exit 1
-  fi
-
-  if [[ $DEST != "" ]] ; then
-    # We cannot simply extract as in the following command, because avrdude or something connected
-    # causes kernel panics with the latest RetroPie 4.8
-    # execute "dpkg -x $BINDIR/$1 $DEST/"
-    #
-    # Instead we install in a chroot which only works on ARM based hosts, e.g. Macbook M1 or RaspberryPi
-    execute "sudo chroot $DEST dpkg -i /home/pi/$GITHUBPROJECT/$1"
-  else
-    execute "sudo dpkg -i $BINDIR/$1"
-  fi
-}
-
-post-install() { #STRING
-  if [ $# != 1 ] ; then
-    echo "ERROR: No args passed"
-    exit 1
-  fi
-
-  if [[ $DEST != "" ]] ; then
-    if ! exists $DEST/$POSTINSTALL ; then
-      echo "#!/bin/bash" > $DEST/$POSTINSTALL
-      echo "set -e" >> $DEST/$POSTINSTALL
-      chmod a+x $DEST/$POSTINSTALL
-    fi
-    echo "dpkg -i /home/pi/$GITHUBPROJECT/$1" >> $DEST/$POSTINSTALL
-  else
-    execute "sudo dpkg -i $BINDIR/$1"
-  fi
 }
 
 exists() { #FILE
@@ -167,12 +111,13 @@ execute "chown -R $USER:$USER $BINDIR"
 # Config.txt bits
 if ! exists "$DESTBOOT/config_ORIGINAL.txt" ; then
   execute "cp $DESTBOOT/config.txt $DESTBOOT/config_ORIGINAL.txt"
-  execute "cp $BINDIR/settings/boot/* $DESTBOOT/"
+  execute "cp $BINDIR/settings/config.txt $DESTBOOT/config.txt"
+  execute "cp $BINDIR/settings/config-cs.txt $DESTBOOT/config-cs.txt"
 fi
 
 # Special case where config.txt has been updated on upgrade
 if [[ ! $(grep "CS CONFIG VERSION: 1.0" "$DESTBOOT/config.txt") ]] ; then
-  execute "cp $BINDIR/settings/boot/config.txt $DESTBOOT/config.txt"
+  execute "cp $BINDIR/settings/config.txt $DESTBOOT/config.txt"
 fi
 
 #####################################################################
@@ -262,91 +207,62 @@ execute "rm -f $DEST/etc/systemd/system/dhcpcd.service.d/wait.conf"
 execute "rm -f $DEST/etc/systemd/system/multi-user.target.wants/wifi-country.service"
 
 # Copy wifi firmware
-execute "mkdir -p $DEST/lib/firmware/rtlwifi/"
 execute "cp $BINDIR/wifi-firmware/rtl* $DEST/lib/firmware/rtlwifi/"
 
 # Copy bluetooth firmware
 execute "mkdir -p $DEST/lib/firmware/rtl_bt/"
 execute "cp $BINDIR/bt-driver/rtlbt_* $DEST/lib/firmware/rtl_bt/"
 
-# Remove console=serial0 from cmdline to make UART-based bluetooth module work
-execute "sed -i 's/console=serial0,115200//' $DESTBOOT/cmdline.txt"
-
 # Fix long delay of boot because looking for wrong serial port
 execute "sed -i \"s/dev-serial1.device/dev-ttyAMA0.device/\" $DEST/lib/systemd/system/hciuart.service"
 
 # Install python-serial
-install "settings/deb/python-serial_2.6-1.1_all.deb"
+execute "dpkg -x $BINDIR/settings/python-serial_2.6-1.1_all.deb $DEST/"
 
 # Install rfkill
-install "settings/deb/rfkill_0.5-1_armhf.deb"
+execute "dpkg -x $BINDIR/settings/rfkill_0.5-1_armhf.deb $DEST/"
 
 # Install avrdude
-# !! The following will work only with hosts that are ARM based, e.g. Macbook M1 or RaspberryPi
-# Avrdude or something connected is causing kernel panics with the latest RetroPie 4.8 if not installed but only extracted :/
-install "settings/deb/libftdi1_0.20-4_armhf.deb"
-install "settings/deb/libhidapi-libusb0_0.8.0~rc1+git20140818.d17db57+dfsg-2_armhf.deb"
-install "settings/deb/avrdude_6.3-20171130+svn1429-2+rpt1_armhf.deb"
-
-# Install DKMS modules
-install "settings/deb/libapr1_1.6.5-1_armhf.deb"
-install "settings/deb/libaprutil1_1.6.1-4_armhf.deb"
-install "settings/deb/libserf-1-1_1.3.9-7_armhf.deb"
-install "settings/deb/libutf8proc2_2.3.0-1_armhf.deb"
-install "settings/deb/libsvn1_1.10.4-1+deb10u3_armhf.deb"
-install "settings/deb/subversion_1.10.4-1+deb10u3_armhf.deb"
-
-# Installing the deb modules means to compile for all installed kernels, which takes ages, so we only add the DKMS modules
-# post-install "sound-module/snd-usb-audio-dkms_0.1_armhf.deb"
-# post-install "wifi-module/rtl8723bs-dkms_4.14_all.deb"
-execute "dpkg -x $BINDIR/sound-module/snd-usb-audio-dkms_0.1_armhf.deb $DEST"
-execute "dpkg -x $BINDIR/wifi-module/rtl8723bs-dkms_4.14_all.deb $DEST"
-post-execute "dkms add -m snd-usb-audio -v 0.1"
-post-execute "dkms add -m rtl8723bs -v 4.14"
+execute "dpkg -x $BINDIR/settings/avrdude_6.3+r1425-1+rpt1_armhf.deb $DEST/"
+execute "dpkg -x $BINDIR/settings/libftdi1_0.20-4_armhf.deb $DEST/"
 
 # Install wiringPi
-install "settings/deb/wiringpi_2.46_armhf.deb"
+execute "dpkg -x $BINDIR/settings/wiringpi_2.46_armhf.deb $DEST/"
 
 # Enable /ramdisk as a tmpfs (ramdisk)
 if [[ $(grep '/ramdisk' $DEST/etc/fstab) == "" ]] ; then
   execute "echo 'tmpfs    /ramdisk    tmpfs    defaults,noatime,nosuid,size=100k    0 0' >> $DEST/etc/fstab"
 fi
 
-if [ -d $DEST/usr/lib/systemd/system ]; then
-  SYSTEMD="$DEST/usr/lib/systemd/system"
-else
-  SYSTEMD="$DEST/lib/systemd/system"
-fi
-
 # Remove the old service
 execute "rm -f $DEST/etc/systemd/system/cs-osd.service"
 execute "rm -f $DEST/etc/systemd/system/multi-user.target.wants/cs-osd.service"
-execute "rm -f $SYSTEMD/cs-osd.service"
+execute "rm -f $DEST/lib/systemd/system/cs-osd.service"
 
 # Prepare for service install
 execute "rm -f $DEST/etc/systemd/system/cs-hud.service"
 execute "rm -f $DEST/etc/systemd/system/multi-user.target.wants/cs-hud.service"
-execute "rm -f $SYSTEMD/cs-hud.service"
+execute "rm -f $DEST/lib/systemd/system/cs-hud.service"
 
-execute "rm -f $SYSTEMD/dpi-cloner.service"
+execute "rm -f $DEST/lib/systemd/system/dpi-cloner.service"
 
 # Install HUD service
-execute "cp $BINDIR/cs-hud/cs-hud.service $SYSTEMD/cs-hud.service"
+execute "cp $BINDIR/cs-hud/cs-hud.service $DEST/lib/systemd/system/cs-hud.service"
 
 # Install RTL Bluetooth service
 execute "cp $BINDIR/bt-driver/rtl-bluetooth.service $DEST/lib/systemd/system/rtl-bluetooth.service"
 execute "cp $BINDIR/bt-driver/rtk_hciattach $DEST/usr/bin/rtk_hciattach"
 
 #execute "systemctl enable cs-hud.service"
-execute "ln -s $SYSTEMD/cs-hud.service $DEST/etc/systemd/system/cs-hud.service"
-execute "ln -s $SYSTEMD/cs-hud.service $DEST/etc/systemd/system/multi-user.target.wants/cs-hud.service"
+execute "ln -s $DEST/lib/systemd/system/cs-hud.service $DEST/etc/systemd/system/cs-hud.service"
+execute "ln -s $DEST/lib/systemd/system/cs-hud.service $DEST/etc/systemd/system/multi-user.target.wants/cs-hud.service"
 
 #execute "systemctl enable rtl-bluetooth.service"
 execute "ln -s $DEST/lib/systemd/system/rtl-bluetooth.service $DEST/etc/systemd/system/rtl-bluetooth.service"
 execute "ln -s $DEST/lib/systemd/system/rtl-bluetooth.service $DEST/etc/systemd/system/multi-user.target.wants/rtl-bluetooth.service"
 
 # Install DPI-CLONER service
-execute "cp $BINDIR/dpi-cloner/dpi-cloner.service $SYSTEMD/dpi-cloner.service"
+execute "cp $BINDIR/dpi-cloner/dpi-cloner.service $DEST/lib/systemd/system/dpi-cloner.service"
 
 if [[ $DEST == "" ]] ; then
   execute "systemctl daemon-reload"

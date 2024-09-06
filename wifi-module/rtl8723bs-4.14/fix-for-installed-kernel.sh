@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+sed -e
 
 #This script tries to fix the wifi module
 
