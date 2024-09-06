@@ -1,5 +1,5 @@
 #!/bin/bash
-#sed -e
+sed -e
 
 #This script tries to fix the sound-usb-audio module
 
