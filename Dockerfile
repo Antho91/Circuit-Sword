@@ -1,4 +1,4 @@
-FROM debian:bookworm AS base
+FROM debian:buster AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 

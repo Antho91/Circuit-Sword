@@ -60,7 +60,7 @@ execute "cp pi/*.dtb $DESTBOOT/"
 execute "cp pi/overlays/*.dtb* $DESTBOOT/overlays/"
 execute "cp pi/overlays/README $DESTBOOT/overlays/"
 
-execute "rsync -avh --delete modules/lib/modules/* $DEST/lib/modules/"
+execute "rsync -avh --delete /modules/lib/modules/* $DEST/lib/modules/"
 
 #####################################################################
 # DONE
