@@ -276,7 +276,7 @@ execute "sed -i 's/console=serial0,115200//' $DESTBOOT/cmdline.txt"
 execute "sed -i \"s/dev-serial1.device/dev-ttyAMA0.device/\" $DEST/lib/systemd/system/hciuart.service"
 
 # First install the .deb package using dpkg
-execute "chroot $DEST dpkg -i /settings/deb/python-serial-asyncio-doc_0.6-4_all.deb"
+execute "chroot $DEST dpkg -i /settings/deb/python-serial-asyncio-doc_0.6-4_alll.deb"
 
 # Then fix dependencies using apt-get
 execute "chroot $DEST apt-get install -f -y"
