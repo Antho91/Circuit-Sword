@@ -275,8 +275,11 @@ execute "sed -i 's/console=serial0,115200//' $DESTBOOT/cmdline.txt"
 # Fix long delay of boot because looking for wrong serial port
 execute "sed -i \"s/dev-serial1.device/dev-ttyAMA0.device/\" $DEST/lib/systemd/system/hciuart.service"
 
-# Install python-serial with dependencies (using apt-get)
-execute "chroot $DEST apt-get install -f -y ./settings/deb/python-serial-asyncio-doc_0.6-4_all.deb"
+# First install the .deb package using dpkg
+execute "chroot $DEST dpkg -i /settings/deb/python-serial-asyncio-doc_0.6-4_all.deb"
+
+# Then fix dependencies using apt-get
+execute "chroot $DEST apt-get install -f -y"
 
 # Install rfkill
 install "settings/deb/rfkill_2.38.1-5+deb12u1_armhf.deb"
