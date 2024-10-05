@@ -45,7 +45,7 @@ fi
 
 BUILD="CSO_CM3_"$(date +"%Y%m%d-%H%M%S")
 GITHUBPROJECT="Circuit-Sword"
-GITHUBURL="https://github.com/Antho91/$GITHUBPROJECT"
+GITHUBURL="https://github.com/weese/$GITHUBPROJECT"
 PIHOMEDIR="/home/pi"
 BINDIR="$PIHOMEDIR/$GITHUBPROJECT"
 USER="pi"
@@ -128,7 +128,9 @@ fi
 execute "cp $IMG $OUTFILE"
 
 # Find partions using kpartx
-execute "kpartx -a -v -s $OUTFILE" 
+execute "kpartx -d /dev/loop0 || true"
+execute "losetup -d /dev/loop0 || true"
+execute "kpartx -a -v -s $OUTFILE"
 
 # Mount partitions
 execute "sudo mount /dev/mapper/loop0p1 $MOUNTFAT32"

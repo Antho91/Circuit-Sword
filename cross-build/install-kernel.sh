@@ -51,16 +51,17 @@ execute() { #STRING
 # LOGIC!
 echo "INSTALL KERNEL.."
 
-execute "cp config /build/images/"
+execute "cd linux"
+execute "cp ../config /build/images/"
 
 execute "cp $DESTBOOT/$KERNEL.img $DESTBOOT/$KERNEL-backup.img"
-execute "cp pi/zImage $DESTBOOT/$KERNEL.img"
-execute "cp pi/*.dtb $DESTBOOT/"
+execute "cp ../pi/zImage $DESTBOOT/$KERNEL.img"
+execute "cp ../pi/*.dtb $DESTBOOT/"
 # execute "rm $DESTBOOT/overlays/*"
-execute "cp pi/overlays/*.dtb* $DESTBOOT/overlays/"
-execute "cp pi/overlays/README $DESTBOOT/overlays/"
+execute "cp ../pi/overlays/*.dtb* $DESTBOOT/overlays/"
+execute "cp ../pi/overlays/README $DESTBOOT/overlays/"
 
-execute "rsync -avh --delete modules/lib/modules/* $DEST/lib/modules/"
+execute "rsync -avh --delete ../modules/lib/modules/* $DEST/lib/modules/"
 
 #####################################################################
 # DONE

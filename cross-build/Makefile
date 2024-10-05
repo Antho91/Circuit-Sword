@@ -1,7 +1,7 @@
 # Latest
 IMG=retropie-buster-4.8-rpi2_3_zero2w
 IMG_URL=https://github.com/RetroPie/RetroPie-Setup/releases/download/4.8/${IMG}.img.gz
-KERNEL=rpi-6.6.y
+KERNEL=rpi-5.15.y
 
 # Anthology's distro
 # IMG=retropie-buster-4.7.1-rpi2_3
@@ -35,7 +35,7 @@ docker-build-image:
 images/${IMG}.img:
 	mkdir -p images
 	cd images; \
-	curl -OL ${IMG_URL}; \
+	wget ${IMG_URL}; \
 	gunzip ${IMG}.img.gz
 
 .PHONY: build-kernel bk

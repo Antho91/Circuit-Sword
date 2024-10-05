@@ -75,7 +75,7 @@ execute "rm -f ../modules/lib/modules/*/source"
 execute "mkdir -p ../pi/overlays"
 
 execute "cp .config ../config"
-execute "cp arch/arm/boot/dts/broadcom/*.dtb ../pi/"
+execute "cp arch/arm/boot/dts/*.dtb ../pi/"
 execute "cp arch/arm/boot/dts/overlays/*.dtb* ../pi/overlays/"
 execute "cp arch/arm/boot/dts/overlays/README ../pi/overlays/"
 execute "cp arch/arm/boot/zImage ../pi/"
