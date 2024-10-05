@@ -7,7 +7,7 @@ RUN apt-get clean && apt-get update && \
     git bc bison flex libssl-dev python3 make kmod libc6-dev libncurses5-dev \
     crossbuild-essential-armhf \
     crossbuild-essential-arm64 \
-    vim wget kpartx rsync sudo util-linux cloud-guest-utils
+    vim wget kpartx rsync sudo util-linux cloud-guest-utils pulseaudio pulseaudio-utils
 
 RUN mkdir /build
 RUN mkdir -p /mnt/fat32
