@@ -3,7 +3,7 @@ KERNEL_HEADERS=/lib/modules/$(KERNELRELEASE)/build
 
 define download_sources =
 	echo "Need a subversion for this!"
-	svn export https://github.com/raspberrypi/linux/branches/rpi-$(KVER).y/drivers/staging/rtl8723bs $(KVER)
+	svn export https://github.com/raspberrypi/linux/tree/rpi-$(KVER).y/drivers/staging/rtl8723bs $(KVER)
 endef
 
 define patch_makefile =
