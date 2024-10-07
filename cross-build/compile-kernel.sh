@@ -49,7 +49,7 @@ echo "COMPILING.."
 execute "cd linux"
 
 # Use default conf with RTL8723BS enabled
-execute "make $MAKE_FLAGS bcm2709_defconfig"
+execute "make $MAKE_FLAGS bcm2710_defconfig"
 execute "sed -i 's/# CONFIG_RTL8723BS is not set/CONFIG_RTL8723BS=m/' .config"
 # We rename the kernel, as it otherwise collides with kernel updates installed by the user
 execute "sed -i 's/CONFIG_LOCALVERSION=\"-v7\"/CONFIG_LOCALVERSION=\"-v7-volume-fix\"/' .config"
