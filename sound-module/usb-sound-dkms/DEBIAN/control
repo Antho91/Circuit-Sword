@@ -1,0 +1,10 @@
+Package: usb-sound-dkms
+Version: 1.0
+Section: kernel
+Priority: optional
+Architecture: all
+Essential: no
+Maintainer: Antho91
+Description: Custom USB Sound Driver voor Raspberry Pi met DKMS-ondersteuning
+ This package bevat de USB Sound driver en maakt gebruik van DKMS om automatisch te worden gehercompileerd bij kernel updates.
+Depends: dkms, raspberrypi-kernel-headers, build-essential

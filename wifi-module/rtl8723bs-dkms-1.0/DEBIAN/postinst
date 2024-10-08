@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+dkms add -m rtl8723bs -v 1.0
+dkms build -m rtl8723bs -v 1.0
+dkms install -m rtl8723bs -v 1.0
