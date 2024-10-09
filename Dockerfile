@@ -40,6 +40,8 @@ RUN --mount=type=cache,target=/usr/src/linux/ \
 COPY cross-build/build-kernel.sh .
 COPY cross-build/compile-kernel.sh .
 COPY cross-build/install-kernel.sh .
+# Ensure all scripts have execute permissions
+RUN chmod +x build-kernel.sh compile-kernel.sh install-kernel.sh
 RUN --mount=type=cache,target=/usr/src/linux/ \
   ./compile-kernel.sh -j8 ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
 
