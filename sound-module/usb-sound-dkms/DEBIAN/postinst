@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+# Download the sourcode
+if [ -x /usr/local/bin/download_and_patch_kernel.sh ]; then
+  echo "Running kernel source download and patch script"
+  /usr/local/bin/download_and_patch_kernel.sh
+else
+  echo "Error: download_and_patch_kernel.sh not found or not executable!"
+  exit 1
+fi
+
+# Dynamisch de patch toepassen op mixer.c
+if [ -x /usr/local/bin/apply-dynamic-patch.sh ]; then
+  echo "Applying dynamic patch to mixer.c"
+  /usr/local/bin/apply-dynamic-patch.sh
+else
+  echo "Error: apply-dynamic-patch.sh not found or not executable!"
+  exit 1
+fi
+
+exit 0
