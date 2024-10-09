@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/usr/src/linux/ \
 # Navigate to the appropriate directory and apply the dynamic patch
 RUN --mount=type=cache,target=/usr/src/linux/ \
   cd linux/sound/usb && \
-  ./apply-dynamic-patch.sh
+  /usr/src/apply-dynamic-patch.sh
 COPY cross-build/build-kernel.sh .
 COPY cross-build/compile-kernel.sh .
 COPY cross-build/install-kernel.sh .
