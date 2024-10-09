@@ -25,12 +25,18 @@ VOLUME /build/images
 
 WORKDIR /usr/src
 
-COPY sound-module/snd-usb-audio-0.1/patches/fix-volume.patch .
+# Copy the dynamic patch script
+COPY sound-module/usb-sound-dkms/usr/local/bin/apply-dynamic-patch.sh .
+# Ensure the script has execute permissions
+RUN chmod +x apply-dynamic-patch.sh
+# Clone the Linux source code
 RUN --mount=type=cache,target=/usr/src/linux/ \
   rm -rf linux/* linux/.[!.]*; \
   git clone --depth=1 https://github.com/raspberrypi/linux --branch ${BRANCH}
+# Navigate to the appropriate directory and apply the dynamic patch
 RUN --mount=type=cache,target=/usr/src/linux/ \
-  patch -p1 -d linux/sound/usb < fix-volume.patch
+  cd linux/sound/usb && \
+  ./apply-dynamic-patch.sh
 COPY cross-build/build-kernel.sh .
 COPY cross-build/compile-kernel.sh .
 COPY cross-build/install-kernel.sh .
