@@ -30,7 +30,7 @@ fi
 if [[ $1 != "" ]] ; then
   BRANCH=$1
 else
-  BRANCH="master"
+  BRANCH="wifi-dev"
 fi
 
 # Stop HUD

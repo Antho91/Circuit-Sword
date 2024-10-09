@@ -40,7 +40,7 @@ fi
 if [[ $3 != "" ]] ; then
   BRANCH=$3
 else
-  BRANCH="master"
+  BRANCH="wifi-dev"
 fi
 
 BUILD="CSO_CM3_"$(date +"%Y%m%d-%H%M%S")

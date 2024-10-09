@@ -45,7 +45,7 @@ else
   DEST=""
 fi
 
-GITHUBPROJECT="Circuit-Sword/tree/wifi-dev"
+GITHUBPROJECT="Circuit-Sword"
 GITHUBURL="https://github.com/Antho91/$GITHUBPROJECT"
 PIHOMEDIR="$DEST/home/pi"
 BINDIR="$PIHOMEDIR/$GITHUBPROJECT"
@@ -56,7 +56,7 @@ POSTINSTALL="/usr/local/sbin/post-install.sh"
 if [[ $2 != "" ]] ; then
   BRANCH=$2
 else
-  BRANCH="master"
+  BRANCH="wifi-dev"
 fi
 
 #####################################################################
