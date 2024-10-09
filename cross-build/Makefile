@@ -35,7 +35,7 @@ docker-build-image:
 images/${IMG}.img:
 	mkdir -p images
 	cd images; \
-	wget ${IMG_URL}; \
+	curl -OL ${IMG_URL}; \
 	gunzip ${IMG}.img.gz
 
 .PHONY: build-kernel bk
