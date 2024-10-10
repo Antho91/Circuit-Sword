@@ -61,15 +61,19 @@ execute "cp pi/overlays/*.dtb* $DESTBOOT/overlays/"
 execute "cp pi/overlays/README $DESTBOOT/overlays/"
 
 # Copy modules and headers to the appropriate locations
-# Ensure that the necessary directories exist
+# Ensure the necessary directories exist
 execute "mkdir -p $DEST/lib/modules/"
 execute "mkdir -p /lib/modules/$(uname -r)/build"
+execute "mkdir -p /lib/modules/$(uname -r)/source"
 
-# Install the kernel modules from the compiled kernel
+# Install the kernel modules
 execute "rsync -avh --delete modules/lib/modules/* $DEST/lib/modules/"
 
-# Optionally, if you want to copy headers as well
-execute "cp -r /usr/src/linux-headers-$(uname -r) $DEST/lib/modules/$(uname -r)/build"
+# Copy the source files to the source directory
+execute "cp -r /usr/src/linux-headers-$(uname -r)/* /lib/modules/$(uname -r)/source/"
+# Optionally copy the build files if they exist
+execute "cp -r /usr/src/linux-headers-$(uname -r)/build/* /lib/modules/$(uname -r)/build/"
+
 
 
 #####################################################################
