@@ -4,8 +4,8 @@
 ```
 sudo apt-get update
 sudo apt-get install raspberrypi-kernel-headers subversion wget unzip
-wget https://github.com/Antho91/Circuit-Sword/raw/master/sound-module/snd-usb-audio-dkms_0.1_armhf.deb
-sudo dpkg -i snd-usb-audio-dkms_0.1_armhf.deb
+wget https://github.com/Antho91/Circuit-Sword/raw/master/sound-module/usb-sound-dkms.deb
+sudo dpkg -i usb-sound-dkms.deb
 ```
 
 ## Option 2: DKMS manual install

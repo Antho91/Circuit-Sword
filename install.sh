@@ -299,7 +299,7 @@ install "settings/deb/subversion_1.10.4-1+deb10u3_armhf.deb"
 # Installing the deb modules means to compile for all installed kernels, which takes ages, so we only add the DKMS modules
 # post-install "sound-module/snd-usb-audio-dkms_0.1_armhf.deb"
 # post-install "wifi-module/rtl8723bs-dkms_4.14_all.deb"
-execute "dpkg -x $BINDIR/sound-module/audio-dkms.deb $DEST" #change compression methode for backwards compatibility
+execute "dpkg -x $BINDIR/sound-module/usb-sound-dkms.deb $DEST" #change compression methode for backwards compatibility
 execute "dpkg -x $BINDIR/wifi-module/rtl8723bs-dkms-1.0.deb $DEST"
 post-execute "dkms add -m usb-sound -v 1.0"
 post-execute "dkms add -m rtl8723bs -v 1.0"
