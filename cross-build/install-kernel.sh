@@ -60,21 +60,16 @@ execute "cp pi/*.dtb $DESTBOOT/"
 execute "cp pi/overlays/*.dtb* $DESTBOOT/overlays/"
 execute "cp pi/overlays/README $DESTBOOT/overlays/"
 
-# Copy modules and headers to the appropriate locations
-# Ensure the necessary directories exist
-execute "mkdir -p $DEST/lib/modules/"
-execute "mkdir -p /lib/modules/$(uname -r)/build"
-execute "mkdir -p /lib/modules/$(uname -r)/source"
-
-# Install the kernel modules
 execute "rsync -avh --delete modules/lib/modules/* $DEST/lib/modules/"
 
-# Copy the source files to the source directory
-execute "cp -r /usr/src/linux-headers-$(uname -r)/* /lib/modules/$(uname -r)/source/"
-# Optionally copy the build files if they exist
-execute "cp -r /usr/src/linux-headers-$(uname -r)/build/* /lib/modules/$(uname -r)/build/"
-
-
+KERNEL_VERSION=$(ls modules/lib/modules/) 
+if [ -d "../linux-headers-${KERNEL_VERSION}" ]; then
+  echo "Copying kernel headers to /usr/src within the image"
+  execute "mkdir -p $DEST/usr/src/linux-headers-${KERNEL_VERSION}"
+  execute "rsync -avh ../linux-headers-${KERNEL_VERSION}/ $DEST/usr/src/linux-headers-${KERNEL_VERSION}/"
+else
+  echo "Kernel headers directory not found. Skipping header installation."
+fi
 
 #####################################################################
 # DONE

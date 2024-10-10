@@ -48,11 +48,14 @@ echo "COMPILING.."
 
 execute "cd linux"
 
+KERNEL_VERSION=$(make kernelrelease)
+echo "Kernel Version: $KERNEL_VERSION"
+
 # Use default conf with RTL8723BS enabled
 execute "make $MAKE_FLAGS bcm2709_defconfig"
 execute "sed -i 's/# CONFIG_RTL8723BS is not set/CONFIG_RTL8723BS=m/' .config"
 # We rename the kernel, as it otherwise collides with kernel updates installed by the user
-execute "sed -i 's/CONFIG_LOCALVERSION=\"-v7\"/CONFIG_LOCALVERSION=\"-v7-volume-fix\"/' .config"
+#execute "sed -i 's/CONFIG_LOCALVERSION=\"-v7\"/CONFIG_LOCALVERSION=\"-v7-volume-fix\"/' .config"
 # execute "sed -i 's/# CONFIG_RFKILL_GPIO is not set/CONFIG_RFKILL_GPIO=m/' .config"
 #execute "sed -i 's/# CONFIG_BT_HCIUART_RTL is not set/CONFIG_BT_HCIUART_RTL=y/' .config"
 
@@ -72,8 +75,11 @@ execute "sudo make INSTALL_MOD_PATH=../modules/ modules_install"
 execute "rm -f ../modules/lib/modules/*/build"
 execute "rm -f ../modules/lib/modules/*/source"
 
-execute "mkdir -p ../pi/overlays"
+# Installeer de kernel headers naar de juiste map
+execute "make $MAKE_FLAGS headers_install INSTALL_HDR_PATH=../linux-headers-${KERNEL_VERSION}"
 
+# copy kernel data to correct folder
+execute "mkdir -p ../pi/overlays"
 execute "cp .config ../config"
 execute "cp arch/arm/boot/dts/broadcom/*.dtb ../pi/"
 execute "cp arch/arm/boot/dts/overlays/*.dtb* ../pi/overlays/"
@@ -83,3 +89,4 @@ execute "cp arch/arm/boot/zImage ../pi/"
 #####################################################################
 # DONE
 echo "COMPILATION DONE!"
+echo "Kernel Version: $KERNEL_VERSION"
