@@ -34,7 +34,7 @@ if [ -x $POSTINSTALL ]; then
 fi
 
 # Load config file and action
-CONFIGFILE="/boot/config-cs.txt"
+CONFIGFILE="/boot/firmware/config-cs.txt"
 if [ -f $CONFIGFILE ]; then
   
   source $CONFIGFILE
@@ -64,7 +64,7 @@ if [ -f $CONFIGFILE ]; then
   
 else
   
-  echo "Starting EMULATIONSTATION.."
-  emulationstation #auto
+  #echo "Starting EMULATIONSTATION.."
+  #emulationstation #auto
   
 fi
