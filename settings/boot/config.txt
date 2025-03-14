@@ -83,6 +83,7 @@ dtoverlay=gpio-poweroff,gpiopin=39,active_low="y"
 #######################
 # CS START DPI SETTINGS
 
+# Enable DPI
 ### **1. 320x240 Custom Display Mode**
 # Active resolution: 320x240
 # Clock frequency: 9.6 MHz
