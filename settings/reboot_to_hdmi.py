@@ -25,7 +25,7 @@ import re
 import argparse
 
 # Config variables
-config_path = "/boot/config.txt"
+config_path = "/boot/firmware/config.txt"
 
 class HDMI_Switcher:
   
@@ -64,7 +64,7 @@ class HDMI_Switcher:
       self.config = f.read().splitlines()
     
     # Validate content
-    for k,v in self.settings.iteritems():
+    for k,v in self.settings.items():
       found_count = 0
       
       for line in self.config:
