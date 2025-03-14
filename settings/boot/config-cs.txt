@@ -1,6 +1,6 @@
 #
 # This script gets sourced on boot
-# It should exist as /boot/config-cs.txt
+# It should exist as /boot/firmware/config-cs.txt
 #
 
 # Mode to boot in, TESTER will run a debug app

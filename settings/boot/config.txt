@@ -23,33 +23,33 @@
 gpu_mem_256=128
 gpu_mem_512=256
 gpu_mem_1024=256
-overscan_scale=1
+#overscan_scale=1
+
+# Run as fast as firmware / board allows
+arm_boost=1
 
 ##########################
 #### GENERIC SETTINGS ####
 ##########################
 
-# Disable low voltage warning when on 3.3v
+# Disable undervoltage warning when running on 3.3V
 avoid_warnings=2
 
-# Enable safe shutdown
-dtoverlay=gpio-poweroff,gpiopin=39,active_low="y"
-
-# Disable onboard audio
+# Disable built-in audio to free up resources
 dtparam=audio=off
 
-# Enable SDIO wifi
-dtoverlay=sdio,poll_once=false
+# Force HDMI output even when no display is detected
+hdmi_force_hotplug=1
 
-# Enable RTL Bluetooth
+# Enable UART for Bluetooth functionality
 enable_uart=1
 dtoverlay=uart0,txd0_pin=32,rxd0_pin=33,pin_func=7
 
-# SD overclock (ONLY IF SD SUPPORTS IT)
-#dtoverlay=sdtweak,overclock_50=100
+# Enable SDIO WiFi module
+dtoverlay=sdio,poll_once=false
 
-# Always enable the HDMI interface
-hdmi_force_hotplug=1
+# Enable safe shutdown via GPIO pin 39
+dtoverlay=gpio-poweroff,gpiopin=39,active_low="y"
 
 #######################
 #### HDMI SETTINGS ####
@@ -64,12 +64,12 @@ hdmi_force_hotplug=1
 #disable_overscan=1
 
 ## Set HDMI output to 1280x720 (720p) - Default
-#hdmi_group=1
-#hdmi_mode=4
+##hdmi_group=1
+##hdmi_mode=4
 
 ### Set HDMI output to 1920x1080 (1080p)
-##hdmi_group=1
-##hdmi_mode=16
+#hdmi_group=1
+#hdmi_mode=16
 
 ### Set HDMI output to 800x480
 ##hdmi_group=2
@@ -83,36 +83,25 @@ hdmi_force_hotplug=1
 #######################
 # CS START DPI SETTINGS
 
-# Enable DPI
-dtoverlay=dpi18
-overscan_left=0
-overscan_right=0
-overscan_top=0
-overscan_bottom=0
-enable_dpi_lcd=1
-display_default_lcd=1
-dpi_group=2
-dpi_mode=87
+### **1. 320x240 Custom Display Mode**
+# Active resolution: 320x240
+# Clock frequency: 9.6 MHz
+#dtoverlay=vc4-kms-dpi-generic,rotate=180,hactive=320,hfp=20,hsync=30,hbp=38
+#dtparam=vactive=240,vfp=4,vsync=3,vbp=10
+#dtparam=clock-frequency=9600000
 
-# Enable 320x240 custom display mode
-framebuffer_width=320
-framebuffer_height=240
-display_rotate=2
-dpi_output_format=24597
-hdmi_timings=320 1 20 30 38 240 1 4 3 10 0 0 0 60 0 9600000 1
+### **2. 640x480 (LCD without adapter)**
+# Active resolution: 640x480
+# Clock frequency: 32 MHz
+dtoverlay=vc4-kms-dpi-generic,rotate=180,hactive=640,hfp=32,hsync=48,hbp=88
+dtparam=vactive=480,vfp=13,vsync=3,vbp=32
+dtparam=clock-frequency=32000000
 
-# Enable NEW 640x480 custom display mode (LCD without adapter required)
-#framebuffer_width=640
-#framebuffer_height=480
-#display_rotate=2
-#dpi_output_format=516117
-#hdmi_timings=640 1 32 48 88 480 1 13 3 32 0 0 0 60 0 32000000 1
-
-# Enable OLD 640x480 custom display mode (LCD that REQUIRES an adapter)
-#framebuffer_width=640
-#framebuffer_height=480
-#display_rotate=3
-#dpi_output_format=287269
-#hdmi_timings=480 1 5 5 14 640 1 3 3 3 0 0 0 60 0 32000000 1
+### **3. 640x480 (LCD with adapter)**
+# Active resolution: 640x480
+# Different DPI settings
+#dtoverlay=vc4-kms-dpi-generic,rotate=270,hactive=480,hfp=5,hsync=5,hbp=14
+#dtparam=vactive=640,vfp=3,vsync=3,vbp=3
+#dtparam=clock-frequency=32000000
 
 # CS END DPI SETTINGS
