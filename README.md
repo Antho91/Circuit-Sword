@@ -2,7 +2,7 @@
 Power management and safe shutdown software for the Circuit Sword. Running on Bookworm with a 64bit kernel
 
 # Installation
-1. After flashing the IMG to the SD, you need to paste the custom.toml on your SD card. In the custom.toml you need to add your WIFI credentials. 
+1. After flashing the IMG to the SD, you need to paste the `custom.toml` on your SD card. In the custom.toml you need to add your WIFI credentials. 
 2. Now you can put the SD card in the Game-boy. And let it boot.
 3. After boot, connect with a SSH connection (like putty or taby) and run `sudo raspi-config` now you need to expand the root partition.
 4. After the reboot connect one more time and run : `sudo apt update sudo apt install libraspberrypi0 libraspberrypi-dev libraspberrypi-bin` this should fix the CS-HUD service dependencies.
