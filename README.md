@@ -11,7 +11,7 @@ Power management and safe shutdown software for the Circuit Sword. Running on Bo
 - Create a new DKMS for the Wi-Fi
 
 # Things broken (if you have spare time, please help me out ;))
-- GPU crashes after exiting the emulator
+- GPU crashes after exiting the emulator. A full reboot is needed.
 - The CS-HUD battery HUD (where we could see the overlay info), no longer works due to the implementation of KMS. Maybe we can create a game (emulation) overlay (I haven’t explored this)
 
 # When will I fix these issues?
