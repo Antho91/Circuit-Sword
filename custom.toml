@@ -1,0 +1,19 @@
+config_version = 1
+
+[system]
+hostname = "CircuitSword"
+
+[ssh]
+enabled = true
+password_authentication = true
+
+[wlan]
+ssid = "WifiName"
+password = "WifiPassword"
+password_encrypted = false
+hidden = false
+country = "NL"
+
+[locale]
+keymap = "us"
+timezone = "Europe/Amsterdam"

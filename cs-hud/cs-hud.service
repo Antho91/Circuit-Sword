@@ -1,9 +1,15 @@
 [Unit]
 Description=Circuit Sword HUD/OSD Service
- 
+After=network.target
+
 [Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/Circuit-Sword/cs-hud
 ExecStart=/home/pi/Circuit-Sword/cs-hud/cs-hud
- 
+Restart=on-failure
+RestartSec=5
+
 [Install]
 WantedBy=multi-user.target
 Alias=cs-hud.service
