@@ -1,0 +1,30 @@
+[Unit]
+Description=Circuit Sword HUD daemon
+# cs-hud talks to the GPIO via the pigpio LIBRARY (gpioInitialise), which needs
+# direct hardware access and must NOT run alongside the pigpiod daemon — they
+# fight over the same DMA/peripheral resources. So do not depend on pigpiod.
+#
+# Order after basic.target (udev done -> /dev/ttyACM0 + GPIO ready), NOT after
+# multi-user.target. multi-user.target waits for the slow first-boot oneshots
+# (package install, etc.), which would delay the HUD by minutes.
+After=basic.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/cs-hud
+Restart=on-failure
+RestartSec=5
+
+# Allow SDL2 KMS/DRM access
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=SDL_RENDER_DRIVER=opengl
+
+# Give the service access to TTY/DRM devices
+SupplementaryGroups=video input
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
