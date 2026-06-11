@@ -4,8 +4,12 @@ Description=RTL8723 Bluetooth Service
 [Service]
 Type=simple
 ExecStart=/usr/bin/rtk_hciattach -n -s 115200 /dev/ttyAMA0 rtk_h5
-StandardOutput=syslog
-StandardError=syslog
+# The BT adapter comes up rfkill soft-blocked, so bluetoothd can't power it on.
+# Clear the block once rtk_hciattach has attached hci0 (short sleep first). After
+# this, bluetoothd's AutoEnable powers the controller on automatically.
+ExecStartPost=/bin/sh -c 'sleep 3; rfkill unblock bluetooth'
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=RTL_BT
 Restart=on-failure
 
