@@ -20,11 +20,16 @@
 
 # This file exists in '/opt/retropie/configs/all/autostart.sh'
 
-# Restart to hdmi on boot to fix any changes to file
-sudo /usr/bin/python /home/pi/Circuit-Sword/settings/reboot_to_hdmi.py --check
+# Log output for diagnostics
+exec >>/home/pi/autostart.log 2>&1
+echo "=== autostart.sh $(date) ==="
+
+# Restore DPI if a previous HDMI switch was interrupted mid-reboot.
+# Only acts when CS CONFIG STATE is REBOOTING_TO_HDMI — safe to skip on first boot.
+sudo /usr/bin/python3 /home/pi/Circuit-Sword/settings/reboot_to_hdmi.py --check || true
 
 # Load config file and action
-CONFIGFILE="/boot/config-cs.txt"
+CONFIGFILE="/boot/firmware/config-cs.txt"
 if [ -f $CONFIGFILE ]; then
   
   source $CONFIGFILE
@@ -51,10 +56,19 @@ if [ -f $CONFIGFILE ]; then
     echo "Starting EMULATIONSTATION.."
     emulationstation #auto
   fi
-  
+
 else
-  
+
   echo "Starting EMULATIONSTATION.."
   emulationstation #auto
-  
+
 fi
+
+# cs-hud is not a systemd service (conflicts with ES over DRM device).
+# Start it here after ES exits, or it can be re-launched separately.
+
+# If we reach here ES has exited (crashed or intentional quit).
+# Drop to an interactive shell so the user can debug instead of letting
+# the session end and triggering the auto-login loop again.
+echo "EmulationStation exited. Dropping to shell. Type 'exit' to reboot or re-run ES."
+exec bash

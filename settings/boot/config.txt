@@ -6,30 +6,13 @@
 #   change. The state of 'REBOOTING_TO_HDMI' means this file is in transition to
 #   becoming HDMI enabled and so you should NOT edit the file at all in this case.
 # This works by removing 1x '#' symbol from each line within the HDMI block. This
-#   means anything with one '#' will end up being enabled. Anything with 2x '#'s 
+#   means anything with one '#' will end up being enabled. Anything with 2x '#'s
 #   will remain disabled (e.g. comments, or alternative modes)
 # If all goes wrong, restore the config.txt file from the backup:
 #   sudo cp ~/Circuit-Sword/settings/config.txt /boot/config.txt
 
 # CS CONFIG VERSION: 1.1
 # CS CONFIG STATE: IDLE
-
-# For more options and information see
-# http://www.raspberrypi.org/documentation/configuration/config-txt.md
-# Some settings may impact device functionality. See link above for details
-# Additional overlays and parameters are documented /boot/overlays/README
-
-# For more options and information see
-# http://rptl.io/configtxt
-# Some settings may impact device functionality. See link above for details
-
-# Uncomment some or all of these to enable the optional hardware interfaces
-#dtparam=i2c_arm=on
-#dtparam=i2s=on
-#dtparam=spi=on
-
-# Additional overlays and parameters are documented
-# /boot/firmware/overlays/README
 
 # Automatically load overlays for detected cameras
 camera_auto_detect=1
@@ -54,13 +37,7 @@ arm_64bit=1
 # Disable compensation for displays with overscan
 disable_overscan=1
 
-# Run as fast as firmware / board allows
-arm_boost=1
-
 [cm4]
-# Enable host mode on the 2711 built-in XHCI USB controller.
-# This line should be removed if the legacy DWC2 controller is required
-# (e.g. for USB device mode) or if USB support is not required.
 otg_mode=1
 
 [cm5]
@@ -71,7 +48,7 @@ gpu_mem_256=128
 gpu_mem_512=256
 gpu_mem_1024=256
 overscan_scale=1
-kernel=kernel8-custom.img
+kernel=kernel8.img
 
 ##########################
 #### GENERIC SETTINGS ####
@@ -140,10 +117,5 @@ dtparam=vactive=480,vfp=13,vsync=3,vbp=32
 dtparam=clock-frequency=32000000
 framebuffer_width=640
 framebuffer_height=480
-max_framebuffers=2
 
 # CS END DPI SETTINGS
-
-
-
-
