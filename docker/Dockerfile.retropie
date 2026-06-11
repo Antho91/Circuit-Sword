@@ -1,0 +1,41 @@
+# ============================================================
+# RetroPie installer stage
+# Takes a Raspberry Pi OS Bookworm Lite 64-bit base image and
+# installs RetroPie into it via a controlled chroot.
+#
+# Input:  /output/rpios-base.img  (user-provided RPi OS image)
+# Output: /output/rpios-bookworm.img
+#
+# Requires --privileged (loop devices + chroot inside container).
+# ============================================================
+# Ubuntu 24.04 has e2fsprogs 1.47 which supports the newer ext4 features
+# (metadata_csum_seed, orphan_file) used by Raspberry Pi OS Bookworm images.
+# Ubuntu 22.04 (cs-build-base) only has 1.46 and fails with "unsupported feature(s)".
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    # Image manipulation
+    parted \
+    e2fsprogs \
+    dosfstools \
+    mount \
+    kpartx \
+    # Chroot / QEMU
+    qemu-user-static \
+    binfmt-support \
+    # Download + extract
+    curl \
+    xz-utils \
+    # General
+    git \
+    rsync \
+    ca-certificates \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/scripts/build-retropie.sh /usr/local/bin/build-retropie.sh
+RUN chmod +x /usr/local/bin/build-retropie.sh
+
+ENTRYPOINT ["/usr/local/bin/build-retropie.sh"]

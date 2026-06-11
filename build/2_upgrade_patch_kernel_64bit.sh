@@ -10,8 +10,7 @@ BUILD_DIR="$START_FOLDER/kernel"
 IMG="rpios-bookworm.img"
 
 LOCALVERSION="-v8-CUSTOM_KERNEL"
-KERNEL="kernel8-custom"
-KERNELOLD="kernel8"
+KERNEL="kernel8"
 
 MNT_BOOT="$IMG_DIR/mnt_boot"
 MNT_ROOT="$IMG_DIR/mnt_root"
@@ -44,7 +43,9 @@ cd "$BUILD_DIR/linux"
 
 # === 2A. Config & Build ===
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
-sed -i 's|# CONFIG_RTL8723BS is not set|CONFIG_RTL8723BS=m|' .config
+# NOTE: RTL8723BS WiFi is intentionally NOT enabled in the kernel.
+# It is managed as an out-of-tree DKMS module (wifi-driver/) which
+# rebuilds automatically on kernel updates via apt.
 echo "CONFIG_LOCALVERSION=\"$LOCALVERSION\"" >> .config
 
 make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs

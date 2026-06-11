@@ -23,7 +23,14 @@ platform="rpi3"  # Adjust for your Raspberry Pi model
 # Step 4: Create chroot image
 echo "Creating chroot image..."
 sudo ./retropie_packages.sh image create_chroot "rpios-$dist"
- 
+
+# Fix DNS inside the chroot so apt-get can reach the internet.
+# Docker's internal DNS (127.0.0.11) doesn't work in a nested chroot.
+CHROOT_DIR="$(pwd)/tmp/build/image/rpios-$dist"
+echo "nameserver 8.8.8.8" | sudo tee "$CHROOT_DIR/etc/resolv.conf" > /dev/null
+echo "nameserver 8.8.4.4" | sudo tee -a "$CHROOT_DIR/etc/resolv.conf" > /dev/null
+echo "[retropie] DNS fixed in chroot ($CHROOT_DIR/etc/resolv.conf)"
+
 # Step 5: Install RetroPie packages
 echo "Installing RetroPie packages..."
 sudo ./retropie_packages.sh image install_rp $platform "rpios-$dist"

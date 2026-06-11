@@ -1,0 +1,42 @@
+# ============================================================
+# cs-hud_new builder
+# Compiles the new SDL2 HUD binary for ARM64 (Raspberry Pi).
+# Uses --platform linux/arm64 — Docker Desktop handles QEMU
+# transparently on both Apple Silicon and Intel Macs.
+#
+# Outputs : /output/hud/cs-hud  (native ARM64 binary)
+# ============================================================
+FROM --platform=linux/arm64 debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    make \
+    pkg-config \
+    libsdl2-dev \
+    libsdl2-ttf-dev \
+    libdrm-dev \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# pigpio is not in Debian repos — build from source.
+# Pinned to a specific tag for reproducibility.
+ARG PIGPIO_TAG=v79
+RUN git clone --depth 1 --branch ${PIGPIO_TAG} \
+        https://github.com/joan2937/pigpio.git /tmp/pigpio \
+    && cd /tmp/pigpio \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/pigpio
+
+WORKDIR /src
+COPY cs-hud_new/ .
+
+RUN make clean && make -j$(nproc)
+
+# Copy the binary AND the pigpio runtime library to /output/hud/ at runtime.
+# The target image does not ship libpigpio, so we bake the .so in (see the
+# assembler). Without it cs-hud fails to start: "libpigpio.so.1: not found".
+ENTRYPOINT ["sh", "-c", "cp -v /src/cs-hud /output/hud/cs-hud && cp -av /usr/local/lib/libpigpio.so* /output/hud/ && ls -l /output/hud/"]

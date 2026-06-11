@@ -1,0 +1,13 @@
+# ============================================================
+# rtk_hciattach cross-compile stage
+# Builds rtk_hciattach from lwfinger/rtl8723bs_bt source
+# for ARM64 (aarch64-linux-gnu).
+#
+# Output: /output/bt/rtk_hciattach
+# ============================================================
+FROM cs-build-base
+
+COPY docker/scripts/build-bt.sh /usr/local/bin/build-bt.sh
+RUN chmod +x /usr/local/bin/build-bt.sh
+
+ENTRYPOINT ["/usr/local/bin/build-bt.sh"]

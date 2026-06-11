@@ -1,0 +1,27 @@
+# ============================================================
+# Image assembler
+# Mounts rpios-bookworm.img, injects the custom kernel and
+# HUD binary, then runs 3_install_additional_software.sh.
+# Produces rpios-cs-final.img in /output/.
+#
+# Requires --privileged (loop device + mount inside container).
+#
+# Expected volumes:
+#   /output           — read: rpios-bookworm.img
+#                       read: kernel/ and hud/ sub-dirs
+#                       write: rpios-cs-final.img
+#   /workspace        — the Circuit-Sword repo (read-only)
+# ============================================================
+FROM cs-build-base
+
+RUN apt-get update && apt-get install -y \
+    qemu-user-static \
+    binfmt-support \
+    samba \
+    kmod \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/scripts/entrypoint-assembler.sh /usr/local/bin/entrypoint-assembler.sh
+RUN chmod +x /usr/local/bin/entrypoint-assembler.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-assembler.sh"]

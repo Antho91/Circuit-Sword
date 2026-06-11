@@ -171,7 +171,7 @@ if ! exists "$DESTBOOT/config_ORIGINAL.txt" ; then
 fi
 
 # Special case where config.txt has been updated on upgrade
-if [[ ! $(grep "CS CONFIG VERSION: 1.0" "$DESTBOOT/config.txt") ]] ; then
+if [[ ! $(grep "CS CONFIG VERSION: 1.1" "$DESTBOOT/config.txt") ]] ; then
   execute "cp $BINDIR/settings/boot/config.txt $DESTBOOT/config.txt"
 fi
 
@@ -275,37 +275,13 @@ execute "sed -i 's/console=serial0,115200//' $DESTBOOT/cmdline.txt"
 # Fix long delay of boot because looking for wrong serial port
 execute "sed -i \"s/dev-serial1.device/dev-ttyAMA0.device/\" $DEST/lib/systemd/system/hciuart.service"
 
-# Install python-serial
-install "settings/deb/python-serial_2.6-1.1_all.deb"
-
-# Install rfkill
-install "settings/deb/rfkill_0.5-1_armhf.deb"
-
-# Install avrdude
-# !! The following will work only with hosts that are ARM based, e.g. Macbook M1 or RaspberryPi
-# Avrdude or something connected is causing kernel panics with the latest RetroPie 4.8 if not installed but only extracted :/
-install "settings/deb/libftdi1_0.20-4_armhf.deb"
-install "settings/deb/libhidapi-libusb0_0.8.0~rc1+git20140818.d17db57+dfsg-2_armhf.deb"
-install "settings/deb/avrdude_6.3-20171130+svn1429-2+rpt1_armhf.deb"
-
-# Install DKMS modules
-install "settings/deb/libapr1_1.6.5-1_armhf.deb"
-install "settings/deb/libaprutil1_1.6.1-4_armhf.deb"
-install "settings/deb/libserf-1-1_1.3.9-7_armhf.deb"
-install "settings/deb/libutf8proc2_2.3.0-1_armhf.deb"
-install "settings/deb/libsvn1_1.10.4-1+deb10u3_armhf.deb"
-install "settings/deb/subversion_1.10.4-1+deb10u3_armhf.deb"
-
-# Installing the deb modules means to compile for all installed kernels, which takes ages, so we only add the DKMS modules
-# post-install "sound-module/snd-usb-audio-dkms_0.1_armhf.deb"
-# post-install "wifi-module/rtl8723bs-dkms_4.14_all.deb"
-execute "dpkg -x $BINDIR/sound-module/snd-usb-audio-dkms_0.1_armhf.deb $DEST"
-execute "dpkg -x $BINDIR/wifi-module/rtl8723bs-dkms_4.14_all.deb $DEST"
-post-execute "dkms add -m snd-usb-audio -v 0.1"
-post-execute "dkms add -m rtl8723bs -v 4.14"
-
-# Install wiringPi
-install "settings/deb/wiringpi_2.46_armhf.deb"
+# Install required packages from apt (arm64-native, Bookworm)
+if [[ $DEST != "" ]] ; then
+  # Offline chroot install — packages must be available in the image
+  execute "chroot $DEST apt-get install -y --no-install-recommends python3-serial rfkill avrdude libftdi1-2 libhidapi-libusb0 dkms"
+else
+  execute "apt-get install -y --no-install-recommends python3-serial rfkill avrdude libftdi1-2 libhidapi-libusb0 dkms"
+fi
 
 # Enable /ramdisk as a tmpfs (ramdisk)
 if [[ $(grep '/ramdisk' $DEST/etc/fstab) == "" ]] ; then
