@@ -167,6 +167,14 @@ if grep -q "^pi:" "$MNT_ROOT/etc/shadow" 2>/dev/null; then
     sed -i "s|^pi:[^:]*:|pi:${PI_HASH}:|" "$MNT_ROOT/etc/shadow"
     echo "[assembler] pi password hash set in /etc/shadow"
 fi
+
+# Newer RPi OS base images ship the 'pi' user DISABLED — login shell set to
+# /usr/sbin/nologin until first-boot user setup. We bypass that setup, so force a
+# real login shell (replace pi's last passwd field); otherwise tty1 autologin (and
+# SSH) fail with "This account is currently not available." and ES never starts.
+sed -i '/^pi:/ s|:[^:]*$|:/bin/bash|' "$MNT_ROOT/etc/passwd"
+echo "[assembler] pi login shell set to /bin/bash"
+
 echo "pi ALL=(ALL) NOPASSWD:ALL" > "$MNT_ROOT/etc/sudoers.d/010_pi-nopasswd"
 chmod 440 "$MNT_ROOT/etc/sudoers.d/010_pi-nopasswd"
 
