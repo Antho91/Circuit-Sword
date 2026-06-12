@@ -103,6 +103,16 @@ WIFI_SRC="drivers/staging/rtl8723bs"
 if [ -d "$WIFI_SRC" ]; then
     rm -rf "$WIFI_OUTPUT/src"
     cp -a "$WIFI_SRC" "$WIFI_OUTPUT/src"
+    # The staging dir is copied AFTER the in-tree kernel build, so it carries the
+    # compiled objects + Kbuild metadata (*.o, .*.cmd, modules.order, *.mod*, ...).
+    # Those record the IN-TREE object paths (drivers/staging/rtl8723bs/...), which
+    # breaks the out-of-tree DKMS rebuild on the Pi: the linker then looks for the
+    # hal/ + os_dep/ objects at those stale paths and fails ("cannot find ...").
+    # Strip them so DKMS always rebuilds from clean source.
+    find "$WIFI_OUTPUT/src" -type f \( \
+         -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' \
+      -o -name '*.mod.o' -o -name '*.a' -o -name 'modules.order' \
+      -o -name 'Module.symvers' -o -name '.*.cmd' \) -delete
     # Rename the staging Makefile to Kbuild — it contains obj-$(CONFIG_RTL8723BS)
     # entries needed by the kernel build system for out-of-tree builds.
     # Our wrapper Makefile goes in as Makefile (called by DKMS/make directly).

@@ -231,6 +231,11 @@ chown -R ${pi_uid}:${pi_gid} "$BINDIR"
 # ~/.bash_profile on tty1. The RetroPie 'enable_autostart' step never ran in the
 # chroot build, so this file is missing and ES never starts. Create it here.
 cat > "$PIHOMEDIR/.bash_profile" << 'BASHPROFILE'
+# Bash reads .bash_profile for login shells and skips .profile entirely when
+# .bash_profile exists. Source .profile here so .bashrc (colour prompt, aliases,
+# etc.) is still loaded for SSH sessions and interactive use.
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+
 # Launch EmulationStation on the console (tty1), not over SSH.
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$SSH_CONNECTION" ]; then
     /opt/retropie/configs/all/autostart.sh
