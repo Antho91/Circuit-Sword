@@ -4,7 +4,8 @@
 # Runs inside Dockerfile.kernel
 #
 # Environment variables:
-#   KERNEL_BRANCH   Git branch to build (default: rpi-6.12.y)
+#   KERNEL_BRANCH   Git branch to build (default: rpi-6.18.y, matches the stock
+#                   kernel the device upgrades to on first boot)
 #   KERNEL_NAME     Output kernel filename (default: kernel8)
 #
 # Output at /output/kernel/:
@@ -15,7 +16,12 @@
 # ============================================================
 set -euo pipefail
 
-KERNEL_BRANCH=${KERNEL_BRANCH:-rpi-6.12.y}
+# rpi-6.18.y matches the stock kernel the device upgrades to via apt on first
+# boot (6.18.x), so the custom first-boot kernel and the eventual running kernel
+# are the same line — smaller jump, cleaner rtl8723bs DKMS rebuild. (The older
+# rpi-6.12.y also works but HEAD broke on 2026-06-09 with a duplicate
+# v3d_cpu_job_free from a bad stable merge.)
+KERNEL_BRANCH=${KERNEL_BRANCH:-rpi-6.18.y}
 KERNEL_NAME=${KERNEL_NAME:-kernel8}
 LOCALVERSION="-v8-cs"
 

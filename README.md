@@ -76,7 +76,7 @@ The final image lands at `output/rpios-cs-final.img`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KERNEL_BRANCH` | `rpi-6.12.y` | RPi kernel branch to build |
+| `KERNEL_BRANCH` | `rpi-6.18.y` | RPi kernel branch to build |
 | `KERNEL_NAME` | `kernel8` | Output kernel filename (no `.img`) |
 
 ---
@@ -114,7 +114,7 @@ The final image lands at `output/rpios-cs-final.img`.
 
 **Build / system:**
 
-- Custom 64-bit kernel (Trixie, `rpi-6.12.y`); WiFi (RTL8723BS) and the
+- Custom 64-bit kernel (Trixie, `rpi-6.18.y`); WiFi (RTL8723BS) and the
   `cs_battery` module rebuild via **DKMS**, surviving an `apt full-upgrade`
 - Bluetooth via `rtk_hciattach`; fan PWM control
 - EmulationStation pixel theme + instant transitions; rotated boot splash

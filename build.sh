@@ -17,7 +17,7 @@
 #   help       Show this message
 #
 # Optional environment variables:
-#   KERNEL_BRANCH   Raspberry Pi kernel branch (default: rpi-6.12.y)
+#   KERNEL_BRANCH   Raspberry Pi kernel branch (default: rpi-6.18.y)
 #   KERNEL_NAME     Kernel filename without .img (default: kernel8)
 #
 # Examples:
@@ -88,7 +88,7 @@ build_kernel() {
     docker run --rm \
         -v "$OUTPUT_DIR":/output \
         -v cs-kernel-cache:/cache \
-        -e KERNEL_BRANCH="${KERNEL_BRANCH:-rpi-6.12.y}" \
+        -e KERNEL_BRANCH="${KERNEL_BRANCH:-rpi-6.18.y}" \
         -e KERNEL_NAME="${KERNEL_NAME:-kernel8}" \
         -e CACHE_DIR=/cache/linux \
         cs-build-kernel
@@ -272,7 +272,7 @@ ${BOLD}Targets:${RESET}
   ${CYAN}help${RESET}       Show this message
 
 ${BOLD}Environment variables:${RESET}
-  KERNEL_BRANCH   e.g. rpi-6.12.y (default: rpi-6.12.y)
+  KERNEL_BRANCH   e.g. rpi-6.18.y (default: rpi-6.18.y)
   KERNEL_NAME     e.g. kernel8 (default: kernel8)
   WIFI_BRANCH     (unused — WiFi source taken from kernel cache directly)
 
