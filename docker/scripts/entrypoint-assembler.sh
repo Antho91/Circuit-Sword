@@ -237,13 +237,67 @@ cat > "$PIHOMEDIR/.bash_profile" << 'BASHPROFILE'
 [ -f "$HOME/.profile" ] && . "$HOME/.profile"
 
 # Launch EmulationStation on the console (tty1), not over SSH.
+# On the very first boot the setup service hasn't run yet (no sentinel) — show
+# the progress screen instead so the user knows what's happening.
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$SSH_CONNECTION" ]; then
-    /opt/retropie/configs/all/autostart.sh
+    if [ ! -f /var/lib/cs-firstboot.done ]; then
+        /usr/local/bin/cs-firstboot-display.sh
+    else
+        /opt/retropie/configs/all/autostart.sh
+    fi
 fi
 BASHPROFILE
 chown ${pi_uid}:${pi_gid} "$PIHOMEDIR/.bash_profile"
 chmod 644 "$PIHOMEDIR/.bash_profile"
 echo "[assembler] Created /home/pi/.bash_profile (RetroPie autostart trigger)"
+
+# Progress screen shown on tty1 during first-boot setup (runs instead of ES).
+# Kills the fbi splash, prints a header, then streams [cs-firstboot] log lines
+# live until the sentinel appears. The firstboot script reboots when done.
+cat > "$MNT_ROOT/usr/local/bin/cs-firstboot-display.sh" << 'DISPLAYSCRIPT'
+#!/bin/bash
+LOGFILE=/boot/firmware/cs-firstboot.log
+SENTINEL=/var/lib/cs-firstboot.done
+
+pkill -x fbi 2>/dev/null || true   # release framebuffer from splash screen
+sleep 0.5
+clear
+printf '\e[?25l'   # hide cursor
+
+echo ""
+echo "  =================================================="
+echo "   Circuit Sword -- First Boot Setup"
+echo "  =================================================="
+echo ""
+echo "   Setting up your device. This takes a few minutes."
+echo "   This only happens once."
+echo ""
+echo "   Do NOT switch off the device!"
+echo ""
+echo "  --------------------------------------------------"
+echo "   Progress:"
+echo ""
+
+touch "$LOGFILE" 2>/dev/null || true
+tail -f "$LOGFILE" 2>/dev/null | grep --line-buffered '^\[cs-firstboot\]' | \
+    while IFS= read -r line; do echo "   $line"; done &
+TAIL_PID=$!
+
+while [ ! -f "$SENTINEL" ]; do sleep 2; done
+kill "$TAIL_PID" 2>/dev/null
+
+echo ""
+echo "  =================================================="
+echo "   Setup done! Rebooting..."
+echo "  =================================================="
+printf '\e[?25h'   # restore cursor
+
+# Do NOT exit — if this script returns, getty restarts the login and
+# .bash_profile would launch ES before the reboot happens.
+sleep infinity
+DISPLAYSCRIPT
+chmod +x "$MNT_ROOT/usr/local/bin/cs-firstboot-display.sh"
+echo "[assembler] First-boot progress display script installed"
 
 # zram swap (~1GB), the FAST primary swap. The CM3 has only 1GB RAM; compressed
 # RAM swap gives headroom for heavier emulators (PSX/N64) and on-device
@@ -454,6 +508,47 @@ if [ -f "$BT_CONF" ]; then
     fi
     echo "[assembler] Set bluetooth AutoEnable=true"
 fi
+
+# HDMI hotplug: restart EmulationStation on the correct connector.
+# SDL2 KMSDRM iterates connectors by ID (HDMI-A-1=35, DPI-1=44) and picks
+# the first *connected* one, so restarting ES is all that's needed — no SDL
+# hints required. The udev rule fires on any DRM change event (HPD).
+cat > "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh" << 'HDMIHOTPLUG'
+#!/bin/bash
+# Only act when ES is actually running (not during boot or first-boot setup)
+pgrep -x emulationstation > /dev/null 2>&1 || exit 0
+
+# Debounce: ignore events within 5 seconds of the last switch
+LOCK=/run/cs-hdmi-switch.lock
+NOW=$(date +%s)
+if [ -f "$LOCK" ]; then
+    LAST=$(cat "$LOCK" 2>/dev/null || echo 0)
+    [ $((NOW - LAST)) -lt 5 ] && exit 0
+fi
+echo "$NOW" > "$LOCK"
+
+HDMI_STATUS=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
+logger -t cs-hdmi "HDMI $HDMI_STATUS — restarting EmulationStation"
+
+# Save RetroArch game state then quit cleanly before killing the session
+if [ -p /tmp/retroarch.fifo ]; then
+    echo "SAVE_STATE" > /tmp/retroarch.fifo
+    sleep 0.5
+    echo "QUIT" > /tmp/retroarch.fifo
+    sleep 1
+fi
+
+# Kill the tty1 session — getty auto-restarts, bash_profile relaunches ES.
+# SDL2 KMSDRM then picks HDMI (connector 35, connected) or DPI (44) in order.
+pkill -t tty1 2>/dev/null || true
+HDMIHOTPLUG
+chmod +x "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh"
+
+mkdir -p "$MNT_ROOT/etc/udev/rules.d"
+cat > "$MNT_ROOT/etc/udev/rules.d/99-cs-hdmi.rules" << 'UDEVRULE'
+ACTION=="change", KERNEL=="card0", SUBSYSTEM=="drm", RUN+="/usr/local/bin/cs-hdmi-hotplug.sh"
+UDEVRULE
+echo "[assembler] HDMI hotplug handler installed"
 
 # Re-enable first-boot root partition expansion.
 #
@@ -826,11 +921,14 @@ systemctl disable cs-firstboot.service >/dev/null 2>&1 || true
 rm -f /etc/systemd/system/multi-user.target.wants/cs-firstboot.service \
       /lib/systemd/system/cs-firstboot.service \
       /opt/cs-dkms-setup.sh
-systemctl daemon-reload >/dev/null 2>&1 || true
+# Do NOT call daemon-reload before reboot: deleting the unit file and
+# reloading while the service is still active confuses systemd and causes
+# systemctl reboot to fail. The sentinel prevents a re-run after reboot;
+# systemd discovers the removed unit on the next startup automatically.
 rm -f /usr/local/bin/cs-firstboot.sh
 sync
 systemctl reboot
-exit 0
+sleep infinity
 FBSCRIPT
 chmod +x "$MNT_ROOT/usr/local/bin/cs-firstboot.sh"
 

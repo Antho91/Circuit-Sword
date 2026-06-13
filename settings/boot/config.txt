@@ -83,18 +83,18 @@ hdmi_force_hotplug=1
 
 ## Enable HDMI audio
 #dtparam=audio=on
-#hdmi_drive=2
+hdmi_drive=2
 
 ## Disable overscan
 #disable_overscan=1
 
-### Set HDMI output to 1280x720 (720p) - Default
+### Set HDMI output to 1280x720 (720p)
 ##hdmi_group=1
 ##hdmi_mode=4
 
 ## Set HDMI output to 1920x1080 (1080p)
-#hdmi_group=1
-#hdmi_mode=16
+hdmi_group=1
+hdmi_mode=16
 
 ### Set HDMI output to 800x480
 ##hdmi_group=2
