@@ -42,35 +42,38 @@ typedef enum {
 } menu_input_t;
 
 typedef struct {
-    int   selected;        // currently highlighted item
-    bool  wifi;
-    int   volume;          // 0-100
-    int   brightness;      // 0-100
-    int   batt_pct;
-    bool  charging;
-    int   wifi_signal;
-    bool  dirty;           // a value changed — needs hw write
-    bool  open;
+    int    selected;       // currently highlighted item
+    bool   wifi;
+    int    volume;         // 0-100
+    int    brightness;     // 0-100
+    int    batt_pct;
+    bool   charging;
+    int    wifi_signal;
+    double cpu_temp;       // degrees C, refreshed every ~2s in the menu loop
+    bool   dirty;          // a value changed — needs hw write
+    bool   open;
 } menu_state_t;
 
 // ============================================================
 // Colors
 // ============================================================
 
-static const SDL_Color C_OVERLAY    = {  5,  8, 18, 210};
-static const SDL_Color C_PANEL      = { 18, 22, 42, 248};
-static const SDL_Color C_BORDER     = { 65, 95,180, 255};
-static const SDL_Color C_SELECTED   = { 50, 95,210, 190};
-static const SDL_Color C_TITLE      = {200,220,255, 255};
-static const SDL_Color C_TEXT       = {230,235,250, 255};
-static const SDL_Color C_SUBTEXT    = {140,145,170, 255};
-static const SDL_Color C_BAR_BG     = { 38, 42, 72, 255};
-static const SDL_Color C_BAR_VOL    = { 70,130,220, 255};
-static const SDL_Color C_BAR_BATT   = { 55,200, 95, 255};
-static const SDL_Color C_BAR_LOW    = {220, 70, 55, 255};
-static const SDL_Color C_WIFI_ON    = { 55,215, 95, 255};
-static const SDL_Color C_WIFI_OFF   = {130,130,155, 255};
-static const SDL_Color C_SEPARATOR  = { 45, 50, 85, 255};
+static const SDL_Color C_OVERLAY    = { 10, 10, 20, 200};
+static const SDL_Color C_PANEL      = { 28, 28, 38, 252};
+static const SDL_Color C_PANEL_HDR  = { 22, 22, 32, 255};  // header darker than body
+static const SDL_Color C_BORDER     = { 60, 60, 90, 180};
+static const SDL_Color C_SELECTED   = {  0,110,200, 175};
+static const SDL_Color C_ICON_BG    = { 42, 42, 58, 255};  // icon tile background
+static const SDL_Color C_TITLE      = {255,255,255, 255};
+static const SDL_Color C_TEXT       = {240,240,248, 255};
+static const SDL_Color C_SUBTEXT    = {150,150,170, 255};
+static const SDL_Color C_BAR_BG     = { 55, 55, 75, 255};
+static const SDL_Color C_BAR_VOL    = {  0,185,230, 255};  // cyan
+static const SDL_Color C_BAR_BATT   = { 90,210, 80, 255};
+static const SDL_Color C_BAR_LOW    = {230, 65, 55, 255};
+static const SDL_Color C_WIFI_ON    = { 90,210, 80, 255};
+static const SDL_Color C_WIFI_OFF   = {110,110,130, 255};
+static const SDL_Color C_SEPARATOR  = { 48, 48, 68, 255};
 
 // ============================================================
 // Helpers
@@ -85,25 +88,6 @@ static void fill_rect(SDL_Renderer *r, SDL_Color c, int x, int y, int w, int h) 
     set_color(r, c);
     SDL_Rect rect = {x, y, w, h};
     SDL_RenderFillRect(r, &rect);
-}
-
-static void draw_rect(SDL_Renderer *r, SDL_Color c, int x, int y, int w, int h) {
-    set_color(r, c);
-    SDL_Rect rect = {x, y, w, h};
-    SDL_RenderDrawRect(r, &rect);
-}
-
-// Draw a horizontal progress bar with border
-static void draw_bar(SDL_Renderer *r, int x, int y, int w, int h,
-                     int percent, SDL_Color fg) {
-    // Background
-    fill_rect(r, C_BAR_BG, x, y, w, h);
-    // Fill
-    int fill_w = (w * percent) / 100;
-    if (fill_w > 0)
-        fill_rect(r, fg, x, y, fill_w, h);
-    // Border
-    draw_rect(r, C_BORDER, x, y, w, h);
 }
 
 // Render UTF-8 text at (x, y) and return the rendered width
@@ -430,36 +414,142 @@ static input_ev_t poll_input(void) {
 // Rendering
 // ============================================================
 
-static void render_battery_bar(SDL_Renderer *r, TTF_Font *font_small,
-                                int x, int y, int w,
-                                int pct, bool charging) {
-    SDL_Color bar_color = (pct <= 15) ? C_BAR_LOW : C_BAR_BATT;
-    draw_bar(r, x, y, w, 14, pct, bar_color);
-
-    char pct_str[16];
-    if (charging)
-        snprintf(pct_str, sizeof(pct_str), "%d%% CHG", pct);
-    else
-        snprintf(pct_str, sizeof(pct_str), "%d%%", pct);
-
-    render_text_right(r, font_small, pct_str, x + w, y - 2, C_SUBTEXT);
+// Fill a rectangle with rounded corners.
+// Uses per-row horizontal line spans for speed (no per-pixel loops).
+static void fill_rounded_rect(SDL_Renderer *r, SDL_Rect rect, int rad, SDL_Color c) {
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
+    if (rad <= 0 || rect.w < 2*rad || rect.h < 2*rad) {
+        SDL_RenderFillRect(r, &rect);
+        return;
+    }
+    // Middle horizontal band
+    SDL_Rect mid = {rect.x, rect.y + rad, rect.w, rect.h - 2*rad};
+    SDL_RenderFillRect(r, &mid);
+    // Top + bottom centre strips (excluding corner quadrants)
+    SDL_Rect top = {rect.x + rad, rect.y,              rect.w - 2*rad, rad};
+    SDL_Rect bot = {rect.x + rad, rect.y + rect.h - rad, rect.w - 2*rad, rad};
+    SDL_RenderFillRect(r, &top);
+    SDL_RenderFillRect(r, &bot);
+    // Corner quadrants: one horizontal line per row, width from circle geometry
+    for (int dy = 0; dy < rad; dy++) {
+        int dx = 0;
+        while ((dx+1)*(dx+1) + dy*dy <= rad*rad) dx++;
+        // top-left
+        SDL_RenderDrawLine(r, rect.x+rad-1-dx, rect.y+rad-1-dy, rect.x+rad-1, rect.y+rad-1-dy);
+        // top-right
+        SDL_RenderDrawLine(r, rect.x+rect.w-rad, rect.y+rad-1-dy, rect.x+rect.w-rad+dx, rect.y+rad-1-dy);
+        // bottom-left
+        SDL_RenderDrawLine(r, rect.x+rad-1-dx, rect.y+rect.h-rad+dy, rect.x+rad-1, rect.y+rect.h-rad+dy);
+        // bottom-right
+        SDL_RenderDrawLine(r, rect.x+rect.w-rad, rect.y+rect.h-rad+dy, rect.x+rect.w-rad+dx, rect.y+rect.h-rad+dy);
+    }
 }
 
-static void render_wifi_signal(SDL_Renderer *r, int x, int y,
-                                int signal, bool enabled) {
-    // Draw 4 small vertical bars representing signal strength
-    int bars = enabled ? (signal > 75 ? 4 : signal > 50 ? 3 :
-                          signal > 25 ? 2 : signal > 5  ? 1 : 0) : 0;
+// Draw a battery icon: body outline, terminal bump, fill proportional to pct.
+static void draw_battery_icon(SDL_Renderer *r, int x, int y, int w, int h,
+                               int pct, bool charging) {
+    int term_w = 3, term_h = h / 3;
+    int body_w = w - term_w;
+    // Terminal
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, C_TEXT.r, C_TEXT.g, C_TEXT.b, 160);
+    SDL_Rect term = {x + body_w, y + (h - term_h)/2, term_w, term_h};
+    SDL_RenderFillRect(r, &term);
+    // Body outline
+    SDL_Rect body = {x, y, body_w, h};
+    SDL_SetRenderDrawColor(r, C_TEXT.r, C_TEXT.g, C_TEXT.b, 160);
+    SDL_RenderDrawRect(r, &body);
+    // Fill
+    SDL_Color fc = (pct <= 20) ? C_BAR_LOW : C_BAR_BATT;
+    int fw = ((body_w - 2) * pct) / 100;
+    if (fw > 0) {
+        SDL_SetRenderDrawColor(r, fc.r, fc.g, fc.b, fc.a);
+        SDL_Rect fill = {x+1, y+1, fw, h-2};
+        SDL_RenderFillRect(r, &fill);
+    }
+    // Charging: simple lightning bolt as two diagonal lines
+    if (charging) {
+        int cx = x + body_w/2, my = y + h/2;
+        SDL_SetRenderDrawColor(r, 255, 220, 70, 255);
+        SDL_RenderDrawLine(r, cx+2, y+1, cx-1, my-1);
+        SDL_RenderDrawLine(r, cx-1, my,  cx+1, my);
+        SDL_RenderDrawLine(r, cx+1, my,  cx-2, y+h-1);
+    }
+}
+
+// Draw 4 stacked WiFi-style signal bars.
+static void draw_wifi_bars(SDL_Renderer *r, int x, int y, int w, int h,
+                            int bars, bool enabled) {
+    int bw = w / 6;
+    int gap = (w - 4*bw) / 3;
     for (int i = 0; i < 4; i++) {
-        int bw = 5, bh = 4 + i * 4;
-        int bx = x + i * 8;
-        int by = y + (16 - bh);
-        SDL_Color c = (i < bars) ? C_WIFI_ON : C_WIFI_OFF;
+        int bh = (h * (i+1)) / 4;
+        int bx = x + i * (bw + gap);
+        int by = y + h - bh;
+        SDL_Color c = (!enabled || i >= bars) ? C_WIFI_OFF : C_WIFI_ON;
         fill_rect(r, c, bx, by, bw, bh);
     }
 }
 
-// Draw the full menu frame
+// Draw a rounded icon tile with a simple symbol inside.
+// icon_type matches the ITEM_* enum values (0=WiFi, 1=Volume, 2=Brightness).
+static void draw_icon_tile(SDL_Renderer *r, int x, int y, int size,
+                            int icon_type, bool selected) {
+    SDL_Rect tile = {x, y, size, size};
+    fill_rounded_rect(r, tile, 8, selected ? (SDL_Color){20,70,160,255} : C_ICON_BG);
+
+    int cx = x + size/2, cy = y + size/2;
+    int pad = size / 5;
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, C_TEXT.r, C_TEXT.g, C_TEXT.b, 220);
+
+    if (icon_type == ITEM_WIFI) {
+        // 4 signal-strength bars centred in tile
+        int bw = 4, gap = 3;
+        int total = 4*bw + 3*gap;
+        int bx = cx - total/2;
+        int base_y = y + size - pad;
+        int max_h  = size - 2*pad;
+        for (int i = 0; i < 4; i++) {
+            int bh = (max_h * (i+1)) / 4;
+            fill_rect(r, C_TEXT, bx + i*(bw+gap), base_y - bh, bw, bh);
+        }
+    } else if (icon_type == ITEM_VOLUME) {
+        int bx = x + pad, bw = size/4, bh = size/3, by = cy - bh/2;
+        // Speaker rectangle
+        fill_rect(r, C_TEXT, bx, by, bw, bh);
+        // Cone
+        SDL_RenderDrawLine(r, bx+bw, by,       cx+size/8, y+pad);
+        SDL_RenderDrawLine(r, bx+bw, by+bh,    cx+size/8, y+size-pad);
+        SDL_RenderDrawLine(r, cx+size/8, y+pad, cx+size/8, y+size-pad);
+        // Two sound waves
+        int wx = cx + size/8 + 4;
+        SDL_RenderDrawLine(r, wx, cy-4, wx+4, cy-8);
+        SDL_RenderDrawLine(r, wx, cy+4, wx+4, cy+8);
+    } else if (icon_type == ITEM_BRIGHTNESS) {
+        int cr = size/7;
+        // Filled circle (sun core)
+        for (int dy = -cr; dy <= cr; dy++)
+            for (int dx = -cr; dx <= cr; dx++)
+                if (dx*dx + dy*dy <= cr*cr)
+                    SDL_RenderDrawPoint(r, cx+dx, cy+dy);
+        // 8 rays: 4 cardinal + 4 diagonal
+        int rs = cr+3, re = cr+6;
+        int d  = (rs*71)/100, de = (re*71)/100;
+        SDL_RenderDrawLine(r, cx+rs, cy,   cx+re, cy);
+        SDL_RenderDrawLine(r, cx-rs, cy,   cx-re, cy);
+        SDL_RenderDrawLine(r, cx,  cy+rs,  cx,   cy+re);
+        SDL_RenderDrawLine(r, cx,  cy-rs,  cx,   cy-re);
+        SDL_RenderDrawLine(r, cx+d, cy+d,  cx+de, cy+de);
+        SDL_RenderDrawLine(r, cx-d, cy+d,  cx-de, cy+de);
+        SDL_RenderDrawLine(r, cx+d, cy-d,  cx+de, cy-de);
+        SDL_RenderDrawLine(r, cx-d, cy-d,  cx-de, cy-de);
+    }
+}
+
+// Draw the full menu frame.
 static void render_menu(SDL_Renderer *r,
                         TTF_Font *font_title,
                         TTF_Font *font_item,
@@ -472,132 +562,149 @@ static void render_menu(SDL_Renderer *r,
     int px = (sw - pw) / 2;
     int py = (sh - ph) / 2;
 
-    int title_h   = 44;
-    int footer_h  = 32;
-    int items_h   = ph - title_h - footer_h;
-    int item_h    = items_h / ITEM_COUNT;
+    int fh_title = TTF_FontHeight(font_title);
+    int fh_item  = TTF_FontHeight(font_item);
+    int fh_small = TTF_FontHeight(font_small);
 
-    // --- Dark full-screen overlay ---
+    int hdr_h    = fh_title + 20;           // header row
+    int footer_h = fh_small + 14;           // footer row
+    int sep_h    = 1;
+    int items_h  = ph - hdr_h - footer_h - 4 * sep_h;
+    int item_h   = items_h / ITEM_COUNT;
+
+    // --- Overlay ---
     fill_rect(r, C_OVERLAY, 0, 0, sw, sh);
 
-    // --- Panel background ---
-    fill_rect(r, C_PANEL, px, py, pw, ph);
+    // --- Panel: 1px border ring then fill ---
+    fill_rounded_rect(r, (SDL_Rect){px-1, py-1, pw+2, ph+2}, MENU_CORNER_RADIUS+1, C_BORDER);
+    fill_rounded_rect(r, (SDL_Rect){px,   py,   pw,   ph},   MENU_CORNER_RADIUS,   C_PANEL);
 
-    // --- Panel border ---
-    draw_rect(r, C_BORDER, px,     py,     pw,     ph);
-    draw_rect(r, C_BORDER, px + 1, py + 1, pw - 2, ph - 2);
-
-    // --- Title bar ---
+    // --- Header ---
     {
-        SDL_Rect title_rect = {px, py, pw, title_h};
-        SDL_Color title_bg  = {28, 35, 70, 255};
-        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
-        set_color(r, title_bg);
-        SDL_RenderFillRect(r, &title_rect);
+        fill_rounded_rect(r, (SDL_Rect){px, py, pw, hdr_h}, MENU_CORNER_RADIUS, C_PANEL_HDR);
 
+        // Title (left)
         render_text(r, font_title, "Circuit Sword",
-                    px + MENU_PADDING, py + (title_h - 22) / 2, C_TITLE);
+                    px + MENU_PADDING, py + (hdr_h - fh_title) / 2, C_TITLE);
 
-        // Battery bar + WiFi signal in title
-        int batt_w = 80;
-        render_battery_bar(r, font_small,
-                           px + pw - batt_w - 46 - MENU_PADDING,
-                           py + (title_h - 14) / 2,
-                           batt_w,
-                           ms->batt_pct, ms->charging);
+        int rx = px + pw - MENU_PADDING;  // right cursor
 
-        render_wifi_signal(r,
-                           px + pw - 40,
-                           py + (title_h - 16) / 2,
-                           ms->wifi_signal, ms->wifi);
+        // Battery icon + percentage
+        int bi_w = 26, bi_h = 14;
+        char pct_str[12];
+        snprintf(pct_str, sizeof(pct_str), ms->charging ? "%d%%+" : "%d%%", ms->batt_pct);
+        int tw = 0; TTF_SizeUTF8(font_small, pct_str, &tw, NULL);
+        int batt_x = rx - bi_w - 4 - tw;
+        int batt_y = py + (hdr_h - bi_h) / 2;
+        draw_battery_icon(r, batt_x, batt_y, bi_w, bi_h, ms->batt_pct, ms->charging);
+        render_text(r, font_small, pct_str, batt_x + bi_w + 4,
+                    py + (hdr_h - fh_small) / 2, C_SUBTEXT);
+        rx = batt_x - 12;
 
-        // Separator line below title
-        fill_rect(r, C_BORDER, px, py + title_h - 1, pw, 1);
+        // WiFi bars
+        int wi_w = 20, wi_h = 16;
+        int bars = 0;
+        if (ms->wifi) {
+            bars = ms->wifi_signal > 75 ? 4 :
+                   ms->wifi_signal > 50 ? 3 :
+                   ms->wifi_signal > 25 ? 2 :
+                   ms->wifi_signal >  5 ? 1 : 0;
+        }
+        draw_wifi_bars(r, rx - wi_w, py + (hdr_h - wi_h) / 2, wi_w, wi_h, bars, ms->wifi);
+        rx -= wi_w + 12;
+
+        // CPU temperature — color shifts warm as it rises
+        char temp_str[12];
+        snprintf(temp_str, sizeof(temp_str), "%.0f\xc2\xb0""C", ms->cpu_temp);
+        SDL_Color temp_col = ms->cpu_temp >= 75.0 ? C_BAR_LOW :
+                             ms->cpu_temp >= 60.0 ? (SDL_Color){230, 130, 40, 255} : C_SUBTEXT;
+        int ttw = 0; TTF_SizeUTF8(font_small, temp_str, &ttw, NULL);
+        render_text(r, font_small, temp_str, rx - ttw,
+                    py + (hdr_h - fh_small) / 2, temp_col);
     }
 
-    // --- Menu items ---
-    for (int i = 0; i < ITEM_COUNT; i++) {
-        int ix = px + 1;
-        int iy = py + title_h + i * item_h;
-        int iw = pw - 2;
+    // Separator after header
+    int yc = py + hdr_h;
+    fill_rect(r, C_SEPARATOR, px + MENU_CORNER_RADIUS, yc, pw - 2*MENU_CORNER_RADIUS, sep_h);
+    yc += sep_h;
 
+    // --- Items ---
+    int icon_size = (item_h > 56) ? 40 : item_h - 16;
+    int icon_x    = px + MENU_PADDING;
+    int label_x   = icon_x + icon_size + 12;
+    int right_x   = px + pw - MENU_PADDING;
+
+    for (int i = 0; i < ITEM_COUNT; i++) {
+        int  iy  = yc;
         bool sel = (ms->selected == i);
 
-        // Selection highlight
+        // Row selection highlight
         if (sel) {
-            fill_rect(r, C_SELECTED, ix, iy, iw, item_h);
+            fill_rounded_rect(r, (SDL_Rect){px+2, iy, pw-4, item_h}, 8, C_SELECTED);
         }
 
-        // Separator below each item (except last)
-        if (i < ITEM_COUNT - 1)
-            fill_rect(r, C_SEPARATOR, ix, iy + item_h - 1, iw, 1);
-
-        int label_x = ix + MENU_PADDING;
-        int label_y = iy + (item_h / 2) - 10;
-
-        // Value area starts at 55% of panel width
-        int val_x = px + (int)(pw * 0.52f);
-        int val_w = pw - (int)(pw * 0.52f) - MENU_PADDING;
+        // Icon tile (vertically centered)
+        int icon_y = iy + (item_h - icon_size) / 2;
+        draw_icon_tile(r, icon_x, icon_y, icon_size, i, sel);
 
         switch (i) {
         case ITEM_WIFI: {
-            render_text(r, font_item, "WiFi", label_x, label_y, C_TEXT);
-
-            const char *state_str = ms->wifi ? "ON" : "OFF";
-            SDL_Color   state_col = ms->wifi ? C_WIFI_ON : C_WIFI_OFF;
-            render_text(r, font_item, state_str,
-                        val_x + val_w / 2 - 20, label_y, state_col);
-
-            if (sel)
-                render_text(r, font_small,
-                            "< Left/Right to toggle >",
-                            label_x, iy + item_h - 18, C_SUBTEXT);
+            render_text(r, font_item, "WiFi",
+                        label_x, iy + (item_h - fh_item) / 2, C_TEXT);
+            // ON/OFF pill badge
+            const char *badge_str = ms->wifi ? "ON" : "OFF";
+            SDL_Color   badge_bg  = ms->wifi ? C_WIFI_ON : C_WIFI_OFF;
+            int bw = 0, bh = 0;
+            TTF_SizeUTF8(font_small, badge_str, &bw, &bh);
+            bw += 16; bh += 6;
+            int bx = right_x - bw;
+            int by = iy + (item_h - bh) / 2;
+            fill_rounded_rect(r, (SDL_Rect){bx, by, bw, bh}, bh/2, badge_bg);
+            render_text(r, font_small, badge_str, bx + 8, by + 3,
+                        (SDL_Color){15, 15, 20, 255});
             break;
         }
-        case ITEM_VOLUME: {
-            render_text(r, font_item, "Volume", label_x, label_y, C_TEXT);
-            draw_bar(r, val_x, iy + (item_h - 14) / 2, val_w - 48, 14,
-                     ms->volume, C_BAR_VOL);
-
-            char pct_str[8];
-            snprintf(pct_str, sizeof(pct_str), "%d%%", ms->volume);
-            render_text_right(r, font_small, pct_str,
-                              px + pw - MENU_PADDING,
-                              iy + (item_h - 16) / 2, C_SUBTEXT);
-
-            if (sel)
-                render_text(r, font_small,
-                            "< Left/Right to adjust >",
-                            label_x, iy + item_h - 18, C_SUBTEXT);
-            break;
-        }
+        case ITEM_VOLUME:
         case ITEM_BRIGHTNESS: {
-            render_text(r, font_item, "Brightness", label_x, label_y, C_TEXT);
-            SDL_Color bar_col = {220, 195, 60, 255};
-            draw_bar(r, val_x, iy + (item_h - 14) / 2, val_w - 48, 14,
-                     ms->brightness, bar_col);
+            const char *label   = (i == ITEM_VOLUME) ? "Volume" : "Brightness";
+            int         val     = (i == ITEM_VOLUME)  ? ms->volume : ms->brightness;
+            SDL_Color   bar_col = (i == ITEM_VOLUME)
+                                    ? C_BAR_VOL
+                                    : (SDL_Color){220, 185, 50, 255};
 
-            char pct_str[8];
-            snprintf(pct_str, sizeof(pct_str), "%d%%", ms->brightness);
-            render_text_right(r, font_small, pct_str,
-                              px + pw - MENU_PADDING,
-                              iy + (item_h - 16) / 2, C_SUBTEXT);
+            // Label + percentage in upper portion of row
+            int top_y = iy + item_h/4 - fh_item/2;
+            render_text(r, font_item, label, label_x, top_y, C_TEXT);
+            char ps[8]; snprintf(ps, sizeof(ps), "%d%%", val);
+            render_text_right(r, font_small, ps, right_x,
+                              iy + item_h/4 - fh_small/2, C_SUBTEXT);
 
-            if (sel)
-                render_text(r, font_small,
-                            "< Left/Right to adjust >",
-                            label_x, iy + item_h - 18, C_SUBTEXT);
+            // Rounded progress bar in lower portion
+            int bar_y = iy + (item_h * 3) / 5;
+            int bar_h = 10;
+            int bar_w = right_x - label_x - 40;
+            fill_rounded_rect(r, (SDL_Rect){label_x, bar_y, bar_w, bar_h},
+                              bar_h/2, C_BAR_BG);
+            int fw = (bar_w * val) / 100;
+            if (fw > 0)
+                fill_rounded_rect(r, (SDL_Rect){label_x, bar_y, fw, bar_h},
+                                  bar_h/2, bar_col);
             break;
         }
         }
+
+        yc += item_h;
+        fill_rect(r, C_SEPARATOR, px + MENU_CORNER_RADIUS, yc, pw - 2*MENU_CORNER_RADIUS, sep_h);
+        yc += sep_h;
     }
 
     // --- Footer ---
     {
         int fy = py + ph - footer_h;
-        fill_rect(r, C_SEPARATOR, px, fy, pw, 1);
-        render_text(r, font_small, "[A] Confirm  [B] Close",
-                    px + MENU_PADDING, fy + (footer_h - 16) / 2, C_SUBTEXT);
+        const char *hint = "A  Confirm    B  Close";
+        int hw = 0; TTF_SizeUTF8(font_small, hint, &hw, NULL);
+        render_text(r, font_small, hint, px + (pw - hw) / 2,
+                    fy + (footer_h - fh_small) / 2, C_SUBTEXT);
     }
 }
 
@@ -704,15 +811,16 @@ void menu_show(void) {
     cs_hw_state_t hw = hardware_read_state();
 
     menu_state_t ms = {
-        .selected   = ITEM_WIFI,
-        .wifi       = hw.wifi_enabled,
-        .volume     = hw.volume     >= 0 ? hw.volume     : 50,
-        .brightness = hw.brightness >= 0 ? hw.brightness : 80,
-        .batt_pct   = hw.batt_percent,
-        .charging   = hw.charging,
-        .wifi_signal= hw.wifi_signal,
-        .dirty      = false,
-        .open       = true,
+        .selected    = ITEM_WIFI,
+        .wifi        = hw.wifi_enabled,
+        .volume      = hw.volume     >= 0 ? hw.volume     : 50,
+        .brightness  = hw.brightness >= 0 ? hw.brightness : 80,
+        .batt_pct    = hw.batt_percent,
+        .charging    = hw.charging,
+        .wifi_signal = hw.wifi_signal,
+        .cpu_temp    = hardware_read_cpu_temp(),
+        .dirty       = false,
+        .open        = true,
     };
 
     // ---- Menu loop ----
@@ -786,6 +894,18 @@ void menu_show(void) {
 
         default:
             break;
+        }
+
+        // Refresh CPU temp + wifi signal every ~2 seconds
+        {
+            static Uint32 last_refresh = 0;
+            Uint32 now_ms = SDL_GetTicks();
+            if (now_ms - last_refresh >= 2000) {
+                ms.cpu_temp    = hardware_read_cpu_temp();
+                if (ms.wifi)
+                    ms.wifi_signal = hardware_get_wifi_signal();
+                last_refresh = now_ms;
+            }
         }
 
         // Draw

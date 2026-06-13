@@ -73,9 +73,10 @@
 // ============================================================
 // Panel size as fraction of screen (0.0 - 1.0)
 #define MENU_PANEL_W_RATIO      0.85f
-#define MENU_PANEL_H_RATIO      0.82f
+#define MENU_PANEL_H_RATIO      0.86f   // taller panel for 3-item layout with icon tiles
 
 #define MENU_PADDING            16
+#define MENU_CORNER_RADIUS      14      // panel + item rounded corners
 #define MENU_ITEM_COUNT         3       // WiFi, Volume, Brightness
 #define MENU_ANIM_SPEED         8       // Overlay fade-in steps
 
