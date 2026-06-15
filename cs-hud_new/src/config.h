@@ -47,17 +47,18 @@
 // ============================================================
 // Fan / over-temperature (GPIO_PIN_OVERTEMP, active LOW: 0 = on, 1 = off)
 // ============================================================
-// GPIO 35 sits in pigpio's second bank, where the hardware-PWM and wave helpers
-// don't reach, so we bit-bang a software PWM in a thread to get an intermediate
-// "quiet" speed. Three tiers (off / low / high) with hysteresis on every
-// transition so it can't hunt around a threshold. Temps in deg C.
-#define FAN_LOW_ON_TEMP        55.0   // off  -> low   at/above this
-#define FAN_OFF_TEMP           50.0   // low  -> off   below this
-#define FAN_HIGH_ON_TEMP       68.0   // low  -> high  at/above this
-#define FAN_HIGH_OFF_TEMP      62.0   // high -> low   below this
-#define FAN_LOW_SPEED          50     // PWM duty (%) for the quiet/low setting
-#define FAN_HIGH_SPEED         100    // PWM duty (%) for full speed
-#define FAN_PWM_FREQ_HZ        150    // bit-bang PWM frequency, chosen by ear (50-1000 tested)
+// Fan: ON/OFF control with hysteresis. The fitted blower (Sunon UB5U3-700, a
+// 2-wire MagLev type) must NOT be speed-controlled by PWM on its supply — the
+// datasheet (note I-7) explicitly forbids power/ground PWM, which can buzz, trip
+// the locked-rotor auto-restart, or shorten life. So we only drive it full-on
+// (steady DC, no chopping) or off. Hysteresis (ON >= 58C, OFF < 50C) keeps it
+// from rapidly cycling around a threshold. Temps in deg C.
+#define FAN_ON_TEMP            58.0   // off -> on  at/above this CPU temp
+#define FAN_OFF_TEMP           50.0   // on  -> off below this (hysteresis)
+#define FAN_HIGH_SPEED         100    // "on" = 100% = steady DC (no PWM)
+// Retained for the (now unused on this build) 1..99 software-PWM path in
+// hardware_set_fan_speed; only 0 and 100 are driven by the temperature logic.
+#define FAN_PWM_FREQ_HZ        150    // bit-bang PWM frequency (unused at 0/100)
 #define FAN_KICKSTART_MS       400    // full-power burst so the fan reliably starts
 #define TEMP_POLL_INTERVAL_S   3      // How often to check CPU temperature
 
@@ -111,3 +112,8 @@
 // a real press), and closes only after this many consecutive "released" reads —
 // which tolerates contact bounce while the (physically flaky) button is held.
 #define MENU_RELEASE_DEBOUNCE   6       // x POLL_INTERVAL_MS = ~300ms sustained release to close
+// Require this many consecutive "pressed" reads before opening the menu. A real
+// press lasts far longer; this rejects a single noisy serial sample (e.g. while
+// the board resets right after the daemon opens the serial port) that would
+// otherwise spuriously launch the menu on its own VT.
+#define MENU_PRESS_DEBOUNCE     3       // x POLL_INTERVAL_MS = ~150ms sustained press to open

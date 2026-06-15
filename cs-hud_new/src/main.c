@@ -76,7 +76,8 @@ static void do_shutdown(bool low_battery) {
 static void *poll_thread(void *arg) {
     (void)arg;
 
-    bool menu_btn_down  = false;   // debounced button state (instant-on, debounced-off)
+    bool menu_btn_down  = false;   // debounced button state (debounced both ways)
+    int  menu_true_cnt  = 0;       // consecutive "pressed" reads (open debounce)
     int  menu_false_cnt = 0;       // consecutive "released" reads
     bool pwrsw_seen_on  = false;   // only honour OFF after we've seen ON
     int  pwrsw_off_ms   = 0;
@@ -84,7 +85,7 @@ static void *poll_thread(void *arg) {
     int  low_count      = 0;
     int  shutdown_armed = 1;       // one-shot guard
     int  temp_timer_ms  = TEMP_POLL_INTERVAL_S * 1000; // check once immediately
-    int  fan_level      = 0;       // 0 = off, 1 = low (PWM), 2 = high (full)
+    int  fan_on         = 0;       // 0 = off, 1 = full on (steady DC, no PWM)
     int  vol_timer_ms   = 0;       // board-volume -> ALSA sync timer
     int  last_vol       = -1;      // last board volume mirrored to ALSA
 
@@ -110,12 +111,16 @@ static void *poll_thread(void *arg) {
         // rides out the contact bounce of the physical button while it's held.
         if (hardware_read_mode_button()) {
             menu_false_cnt = 0;
-            if (!menu_btn_down) {
+            // Open only after the button has read "pressed" several ticks in a
+            // row, so a single noisy serial sample can't launch the menu.
+            if (!menu_btn_down && ++menu_true_cnt >= MENU_PRESS_DEBOUNCE) {
                 menu_btn_down = true;
-                g_menu_request = 1;   // rising edge opens the menu
+                g_menu_request = 1;   // debounced rising edge opens the menu
             }
-        } else if (menu_btn_down && ++menu_false_cnt >= MENU_RELEASE_DEBOUNCE) {
-            menu_btn_down = false;
+        } else {
+            menu_true_cnt = 0;
+            if (menu_btn_down && ++menu_false_cnt >= MENU_RELEASE_DEBOUNCE)
+                menu_btn_down = false;
         }
         g_menu_btn_down = menu_btn_down ? 1 : 0;
 
@@ -156,36 +161,22 @@ static void *poll_thread(void *arg) {
             }
         }
 
-        // --- Fan / temperature (every TEMP_POLL_INTERVAL_S, 3-tier + hysteresis) ---
-        // off (0) --55C--> low (PWM) --68C--> high (full)
-        //      off <--50C-- low      <--62C-- high
+        // --- Fan / temperature (every TEMP_POLL_INTERVAL_S, ON/OFF + hysteresis) ---
+        // The 2-wire blower must not be PWM speed-controlled (datasheet), so we
+        // drive it full-on / off only:  off --[>=FAN_ON_TEMP]--> on
+        //                               on  --[< FAN_OFF_TEMP]--> off
         temp_timer_ms += POLL_INTERVAL_MS;
         if (temp_timer_ms >= TEMP_POLL_INTERVAL_S * 1000) {
             temp_timer_ms = 0;
             double temp = hardware_read_cpu_temp();
             if (temp > 0) {
-                int new_level = fan_level;
-                switch (fan_level) {
-                    case 0:  // off
-                        if (temp >= FAN_LOW_ON_TEMP) new_level = 1;
-                        break;
-                    case 1:  // low (PWM)
-                        if (temp >= FAN_HIGH_ON_TEMP)  new_level = 2;
-                        else if (temp < FAN_OFF_TEMP)  new_level = 0;
-                        break;
-                    case 2:  // high (full)
-                        if (temp < FAN_HIGH_OFF_TEMP)  new_level = 1;
-                        break;
-                }
-                if (new_level != fan_level) {
-                    fan_level = new_level;
-                    int speed = (fan_level == 2) ? FAN_HIGH_SPEED
-                              : (fan_level == 1) ? FAN_LOW_SPEED
-                              : 0;
-                    hardware_set_fan_speed(speed);
-                    printf("[fan] %s (%.1f C)\n",
-                           (fan_level == 2) ? "HIGH" :
-                           (fan_level == 1) ? "LOW " : "OFF ", temp);
+                int want = fan_on;
+                if (!fan_on && temp >= FAN_ON_TEMP)  want = 1;
+                if ( fan_on && temp <  FAN_OFF_TEMP) want = 0;
+                if (want != fan_on) {
+                    fan_on = want;
+                    hardware_set_fan_speed(fan_on ? FAN_HIGH_SPEED : 0);
+                    printf("[fan] %s (%.1f C)\n", fan_on ? "ON " : "OFF", temp);
                 }
             }
         }
@@ -289,15 +280,18 @@ int main(int argc, char **argv) {
             hardware_set_brightness(0);            // DPI floor (firmware min PWM)
             printf("[cs-hud] HDMI active — DPI backlight dimmed\n");
         } else {
+            // Always set a valid brightness so a previous HDMI session that left
+            // the board's EEPROM at 0 can never leave the handheld panel dark.
+            int restore = 100;   // default if we have no saved value
             FILE *bf = fopen(BRIGHT_FILE, "r");
             if (bf) {
                 int saved = -1;
-                if (fscanf(bf, "%d", &saved) == 1 && saved > 0) {
-                    hardware_set_brightness(saved);
-                    printf("[cs-hud] DPI mode — restored brightness %d%%\n", saved);
-                }
+                if (fscanf(bf, "%d", &saved) == 1 && saved > 0 && saved <= 100)
+                    restore = saved;
                 fclose(bf);
             }
+            hardware_set_brightness(restore);
+            printf("[cs-hud] DPI mode — brightness %d%%\n", restore);
         }
     }
 
