@@ -284,6 +284,15 @@ cat > "$MNT_ROOT/usr/local/bin/cs-firstboot-display.sh" << 'DISPLAYSCRIPT'
 LOGFILE=/boot/firmware/cs-firstboot.log
 SENTINEL=/var/lib/cs-firstboot.done
 
+# Don't take over the screen yet: let the splash + the normal boot-service
+# messages run (the user sees the device is busy), and only switch to the
+# Progress view once cs-firstboot has actually started doing work (its log gets
+# content). That way the Progress screen is never empty/"hung", and the boot
+# messages don't clobber it. cs-firstboot only runs after network + NTP (~20s),
+# so this waits naturally — by then the systemd service-start spam is finished.
+touch "$LOGFILE" 2>/dev/null || true
+while [ ! -s "$LOGFILE" ] && [ ! -f "$SENTINEL" ]; do sleep 1; done
+
 pkill -x fbi 2>/dev/null || true   # release framebuffer from splash screen
 sleep 0.5
 clear
@@ -303,12 +312,9 @@ echo "  --------------------------------------------------"
 echo "   Progress:"
 echo ""
 
-touch "$LOGFILE" 2>/dev/null || true
-# Show the live apt + DKMS output so the screen reflects the real work. The setup
-# log is mostly raw apt/dpkg/dkms output (NOT [cs-firstboot]-prefixed); an earlier
-# strict grep for '^[cs-firstboot]' hid all of it, making the multi-minute package
-# install + DKMS compile look like a hang on an empty "Progress:" screen.
-tail -f "$LOGFILE" 2>/dev/null | \
+# Show ALL the live apt + DKMS output (from the top of the log) so the user sees
+# clear activity: package installs, then the WiFi/battery DKMS module builds.
+tail -n +1 -f "$LOGFILE" 2>/dev/null | \
     while IFS= read -r line; do echo "   $line"; done &
 TAIL_PID=$!
 
