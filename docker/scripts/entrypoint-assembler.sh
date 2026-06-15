@@ -304,7 +304,11 @@ echo "   Progress:"
 echo ""
 
 touch "$LOGFILE" 2>/dev/null || true
-tail -f "$LOGFILE" 2>/dev/null | grep --line-buffered '^\[cs-firstboot\]' | \
+# Show the live apt + DKMS output so the screen reflects the real work. The setup
+# log is mostly raw apt/dpkg/dkms output (NOT [cs-firstboot]-prefixed); an earlier
+# strict grep for '^[cs-firstboot]' hid all of it, making the multi-minute package
+# install + DKMS compile look like a hang on an empty "Progress:" screen.
+tail -f "$LOGFILE" 2>/dev/null | \
     while IFS= read -r line; do echo "   $line"; done &
 TAIL_PID=$!
 
