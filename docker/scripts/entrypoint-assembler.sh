@@ -312,10 +312,15 @@ echo "  --------------------------------------------------"
 echo "   Progress:"
 echo ""
 
-# Show ALL the live apt + DKMS output (from the top of the log) so the user sees
-# clear activity: package installs, then the WiFi/battery DKMS module builds.
-tail -n +1 -f "$LOGFILE" 2>/dev/null | \
-    while IFS= read -r line; do echo "   $line"; done &
+# Show one concise line per major step — the [cs-firstboot] markers the setup
+# script prints (Installing dkms, Registering WiFi module, Installing kernel +
+# building modules, Installing Samba, Done) — with the technical prefix stripped.
+# A clean high-level view instead of the raw apt/dkms firehose. The wait above
+# means the first marker ("Waiting for network...") shows right as we take over,
+# so the screen is never empty.
+tail -n +1 -f "$LOGFILE" 2>/dev/null \
+    | grep --line-buffered '^\[cs-firstboot\]' \
+    | sed -u 's/^\[cs-firstboot\]/  /' &
 TAIL_PID=$!
 
 while [ ! -f "$SENTINEL" ]; do sleep 2; done
@@ -936,10 +941,11 @@ fi
 # The headers metapackages track the kernel ABI so future upgrades pull matching
 # headers. If installing them pulls a stock kernel now, its postinst.d/dkms hook
 # builds r8723bs for it (registered above) → WiFi works on the next boot.
-echo "[cs-firstboot] Installing kernel headers..."
+echo "[cs-firstboot] Installing kernel + building WiFi/battery modules (a few minutes)..."
 apt-get install -y --no-install-recommends $APT_KEEPCONF \
     linux-headers-rpi-v8 linux-headers-rpi-2712 \
     || echo "[cs-firstboot] WARNING: headers incomplete"
+echo "[cs-firstboot] Kernel modules built."
 
 # (No explicit `dkms autoinstall` here: the kernel package's own postinst.d/dkms
 # hook already builds r8723bs for each stock kernel as it installs above. Running
@@ -970,6 +976,7 @@ fi
 # --- 4. Optional helpers + Samba --------------------------------------------
 # kbd provides openvt, which the cs-hud daemon uses to launch its on-screen menu
 # on a fresh VT (so SDL/KMSDRM can become DRM master and render over ES/RetroArch).
+echo "[cs-firstboot] Installing helpers + Samba file sharing..."
 apt-get install -y --no-install-recommends $APT_KEEPCONF \
     rfkill kbd python3-serial avrdude libftdi1-2 libhidapi-libusb0 \
     || echo "[cs-firstboot] some optional packages unavailable (continuing)"
