@@ -117,7 +117,8 @@ The final image lands at `output/rpios-cs-final.img`.
 - Plug in an HDMI cable and the device **reboots into 1080p on HDMI** (the DPI
   handheld panel goes dark); unplug it and it reboots back to the **640×480
   internal screen**. After plugging in, the switch takes ~5 s to register, then a
-  normal reboot (~15 s). Live-switching the running session is unreliable on the
+  normal reboot — EmulationStation is back in ~10 s (it no longer waits for WiFi
+  to connect). Live-switching the running session is unreliable on the
   KMS stack, so a fresh boot — which always brings the display up correctly — is
   used instead. The DPI overlay stays loaded in both modes (so the panel is never
   left undriven), and the boot splash is shown right-side-up on whichever display

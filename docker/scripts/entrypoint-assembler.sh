@@ -201,6 +201,31 @@ ln -sf /lib/systemd/system/getty@.service \
     "$MNT_ROOT/etc/systemd/system/getty.target.wants/getty@tty1.service"
 echo "[assembler] tty1 autologin configured + getty@tty1 enabled"
 
+# --- Boot speed: don't make EmulationStation wait for the network ----------
+# The RTL8723BS WiFi driver takes several seconds to bring up wlan0, which
+# NetworkManager (and thus network.target) waits for. Debian's
+# systemd-user-sessions.service is ordered After=network.target, so the tty1
+# autologin -> EmulationStation path was blocked on WiFi association (~16s).
+# Drop that ordering so ES starts ~9s sooner; WiFi still comes up in the
+# background. We override the shipped unit with a copy that has network.target
+# removed (a drop-in After= reset did NOT take on systemd 257).
+if [ -f "$MNT_ROOT/usr/lib/systemd/system/systemd-user-sessions.service" ]; then
+    cp "$MNT_ROOT/usr/lib/systemd/system/systemd-user-sessions.service" \
+       "$MNT_ROOT/etc/systemd/system/systemd-user-sessions.service"
+    sed -i 's/ network.target//' \
+       "$MNT_ROOT/etc/systemd/system/systemd-user-sessions.service"
+    echo "[assembler] Decoupled systemd-user-sessions from network.target"
+fi
+
+# NetworkManager-wait-online blocks boot until the network is online — nothing on
+# a handheld needs that. Mask it so network-online.target is reached promptly.
+ln -sf /dev/null "$MNT_ROOT/etc/systemd/system/NetworkManager-wait-online.service"
+
+# udisks2 (removable-media automounting) isn't needed on a fixed handheld; mask
+# it (offline we can't know where it was enabled, so masking is definitive).
+ln -sf /dev/null "$MNT_ROOT/etc/systemd/system/udisks2.service"
+echo "[assembler] Boot-speed tweaks applied (wait-online masked, udisks2 off)"
+
 PIHOMEDIR="$MNT_ROOT/home/pi"
 BINDIR="$PIHOMEDIR/Circuit-Sword"
 SYSTEMD="$MNT_ROOT/lib/systemd/system"
