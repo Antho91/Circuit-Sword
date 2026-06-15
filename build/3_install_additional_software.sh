@@ -120,12 +120,10 @@ if exists "$MNT_ROOT/opt/retropie/configs/all/emulationstation/es_settings.cfg";
   execute "echo '<string name=\"AudioDevice\" value=\"PCM\" />' >> $MNT_ROOT/opt/retropie/configs/all/emulationstation/es_settings.cfg"
 fi
 
-# 5. Reboot to HDMI
-execute "cp $BINDIR/settings/reboot_to_hdmi.sh $PIHOMEDIR/RetroPie/retropiemenu/reboot_to_hdmi.sh"
-execute "cp -p $BINDIR/settings/reboot_to_hdmi.png $PIHOMEDIR/RetroPie/retropiemenu/icons/reboot_to_hdmi.png"
-if ! grep -q "reboot_to_hdmi" "$MNT_ROOT/opt/retropie/configs/all/emulationstation/gamelists/retropie/gamelist.xml"; then
-  execute "sed -i 's|</gameList>|  <game>\\n    <path>./reboot_to_hdmi.sh</path>\\n    <name>One Time Reboot to HDMI</name>\\n    <desc>Enable HDMI and automatically reboot for it to apply. The subsequent power cycle will revert back to the internal screen. It is normal when enabled for the internal screen to remain grey/white.</desc>\\n    <image>/home/pi/RetroPie/retropiemenu/icons/reboot_to_hdmi.png</image>\\n  </game>\\n</gameList>|g' $MNT_ROOT/opt/retropie/configs/all/emulationstation/gamelists/retropie/gamelist.xml"
-fi
+# 5. (Removed: "One Time Reboot to HDMI" menu entry — HDMI/DPI switching is now
+#    automatic on cable hotplug via cs-hdmi-hotplug.sh. The old menu ran
+#    reboot_to_hdmi.py, which comments out the DPI overlay and would reintroduce
+#    the stuck-panel artifacts the new approach avoids.)
 
 # 6. Autosave aanzetten
 execute "sed -i 's/# autosave_interval =/autosave_interval = \"30\"/' $MNT_ROOT/opt/retropie/configs/all/retroarch.cfg"
