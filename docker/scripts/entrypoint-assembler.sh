@@ -224,7 +224,20 @@ ln -sf /dev/null "$MNT_ROOT/etc/systemd/system/NetworkManager-wait-online.servic
 # udisks2 (removable-media automounting) isn't needed on a fixed handheld; mask
 # it (offline we can't know where it was enabled, so masking is definitive).
 ln -sf /dev/null "$MNT_ROOT/etc/systemd/system/udisks2.service"
-echo "[assembler] Boot-speed tweaks applied (wait-online masked, udisks2 off)"
+
+# Disable the automatic apt timers. On a fresh first boot, apt-daily grabs the
+# dpkg lock right when cs-firstboot is installing its packages, which made the
+# samba install fail with "Could not get lock" (so first-boot never completed and
+# retried every boot). They're also undesirable on an appliance — an unattended
+# kernel upgrade could break the DKMS / custom-kernel setup. Updates happen via
+# image rebuilds instead.
+for u in apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service; do
+    ln -sf /dev/null "$MNT_ROOT/etc/systemd/system/$u"
+done
+# Belt-and-suspenders: make any apt invocation wait for the lock (up to 5 min)
+# instead of failing immediately if something else is mid-transaction.
+echo 'DPkg::Lock::Timeout "300";' > "$MNT_ROOT/etc/apt/apt.conf.d/99cs-lock-timeout"
+echo "[assembler] Boot-speed tweaks applied (wait-online + udisks2 + apt-daily masked)"
 
 PIHOMEDIR="$MNT_ROOT/home/pi"
 BINDIR="$PIHOMEDIR/Circuit-Sword"
