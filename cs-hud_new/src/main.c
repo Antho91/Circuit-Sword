@@ -266,6 +266,41 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    // --- DPI backlight follows the active display ---
+    // When docked to HDMI, ES runs on HDMI but the DPI panel stays driven (so it
+    // never shows stuck garbage) — which means RetroPie console dialogs (audio,
+    // bluetooth, …) ghost onto it. Dim the DPI backlight to its floor here so the
+    // handheld panel stays dark while docked, and restore the user's brightness
+    // when running on DPI again. We run before the poll thread starts, so this
+    // owns the serial line. The board persists brightness in EEPROM, so we stash
+    // the real value in a file to survive the dim/restore across reboots.
+    {
+        const char *BRIGHT_FILE = "/var/lib/cs-hud-brightness";
+        char status[32] = {0};
+        FILE *sf = fopen("/sys/class/drm/card0-HDMI-A-1/status", "r");
+        if (sf) { if (!fgets(status, sizeof status, sf)) status[0] = 0; fclose(sf); }
+
+        if (strncmp(status, "connected", 9) == 0) {
+            int cur = hardware_get_brightness();   // user's brightness (board EEPROM)
+            if (cur > 0) {
+                FILE *bf = fopen(BRIGHT_FILE, "w");
+                if (bf) { fprintf(bf, "%d\n", cur); fclose(bf); }
+            }
+            hardware_set_brightness(0);            // DPI floor (firmware min PWM)
+            printf("[cs-hud] HDMI active — DPI backlight dimmed\n");
+        } else {
+            FILE *bf = fopen(BRIGHT_FILE, "r");
+            if (bf) {
+                int saved = -1;
+                if (fscanf(bf, "%d", &saved) == 1 && saved > 0) {
+                    hardware_set_brightness(saved);
+                    printf("[cs-hud] DPI mode — restored brightness %d%%\n", saved);
+                }
+                fclose(bf);
+            }
+        }
+    }
+
     // --- Input + battery poll thread ---
     pthread_t poll_tid;
     if (pthread_create(&poll_tid, NULL, poll_thread, NULL) != 0) {

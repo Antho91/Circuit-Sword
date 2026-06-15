@@ -73,9 +73,6 @@ dtoverlay=uart0,txd0_pin=32,rxd0_pin=33,pin_func=7
 # SD overclock (ONLY IF SD SUPPORTS IT)
 #dtoverlay=sdtweak,overclock_50=100
 
-# Always enable the HDMI interface
-hdmi_force_hotplug=1
-
 #######################
 #### HDMI SETTINGS ####
 #######################

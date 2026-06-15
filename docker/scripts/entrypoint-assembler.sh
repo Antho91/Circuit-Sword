@@ -509,38 +509,53 @@ if [ -f "$BT_CONF" ]; then
     echo "[assembler] Set bluetooth AutoEnable=true"
 fi
 
-# HDMI hotplug: restart EmulationStation on the correct connector.
-# SDL2 KMSDRM iterates connectors by ID (HDMI-A-1=35, DPI-1=44) and picks
-# the first *connected* one, so restarting ES is all that's needed — no SDL
-# hints required. The udev rule fires on any DRM change event (HPD).
+# HDMI hotplug: on a REAL cable change, reboot. A fresh boot reliably brings ES
+# up on the right display (HDMI@1080p when plugged, DPI@640x480 when not) —
+# live-switching ES is unreliable on SDL/KMSDRM (it keeps inheriting the DPI's
+# 640x480). Both the DPI overlay and HDMI stay active in config.txt at all times,
+# so the DPI panel is never left undriven (an undriven panel shows stuck garbage
+# that only a power-cycle clears). We compare the live cable state against the
+# value autostart.sh recorded at boot, so spurious DRM events and the already-
+# matched state never trigger a reboot loop. The udev rule fires on any DRM HPD.
 cat > "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh" << 'HDMIHOTPLUG'
 #!/bin/bash
-# Only act when ES is actually running (not during boot or first-boot setup)
-pgrep -x emulationstation > /dev/null 2>&1 || exit 0
+# Skip during first-boot setup (sentinel absent = setup still running)
+[ -f /var/lib/cs-firstboot.done ] || exit 0
 
-# Debounce: ignore events within 5 seconds of the last switch
+# Debounce: ignore events within 8 seconds of the last run (HPD fires a burst)
 LOCK=/run/cs-hdmi-switch.lock
 NOW=$(date +%s)
 if [ -f "$LOCK" ]; then
     LAST=$(cat "$LOCK" 2>/dev/null || echo 0)
-    [ $((NOW - LAST)) -lt 5 ] && exit 0
+    [ $((NOW - LAST)) -lt 8 ] && exit 0
 fi
 echo "$NOW" > "$LOCK"
 
-HDMI_STATUS=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
-logger -t cs-hdmi "HDMI $HDMI_STATUS — restarting EmulationStation"
+# Let the cable state settle (HPD fires a burst of events), then act only on a
+# real, stable change away from what we booted with.
+sleep 3
+CUR=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
+BOOT=$(cat /run/cs-hdmi-boot-state 2>/dev/null || echo unknown)
+[ "$BOOT" = "unknown" ] && exit 0
+[ "$CUR"  = "unknown" ] && exit 0
+[ "$CUR"  = "$BOOT" ]   && exit 0
+CUR2=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
+[ "$CUR2" != "$CUR" ]   && exit 0
+[ "$CUR2" = "$BOOT" ]   && exit 0
 
-# Save RetroArch game state then quit cleanly before killing the session
-if [ -p /tmp/retroarch.fifo ]; then
-    echo "SAVE_STATE" > /tmp/retroarch.fifo
-    sleep 0.5
-    echo "QUIT" > /tmp/retroarch.fifo
-    sleep 1
+# Point the boot splash at the orientation matching the display we will boot into
+# (HDMI = upright kr_logo_hdmi.png, DPI = pre-rotated kr_logo.png for the panel).
+if [ "$CUR2" = "connected" ]; then
+    echo "/home/pi/Circuit-Sword/settings/kr_logo_hdmi.png" > /etc/splashscreen.list
+else
+    echo "/home/pi/Circuit-Sword/settings/kr_logo.png" > /etc/splashscreen.list
 fi
 
-# Kill the tty1 session — getty auto-restarts, bash_profile relaunches ES.
-# SDL2 KMSDRM then picks HDMI (connector 35, connected) or DPI (44) in order.
-pkill -t tty1 2>/dev/null || true
+logger -t cs-hdmi "HDMI changed ($BOOT -> $CUR2) — rebooting to switch display"
+# Save a running game before the reboot.
+[ -p /tmp/retroarch.fifo ] && { echo "SAVE_STATE" > /tmp/retroarch.fifo; sleep 0.5; }
+sync
+systemctl reboot
 HDMIHOTPLUG
 chmod +x "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh"
 
