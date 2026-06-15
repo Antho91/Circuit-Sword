@@ -112,11 +112,23 @@ The final image lands at `output/rpios-cs-final.img`.
 - **Battery + clock** are shown in **RetroArch's own menu**, fed by the
   `cs_battery` power-supply module.
 
+**HDMI output / docking:**
+
+- Plug in an HDMI cable and the device **reboots into 1080p on HDMI** (the DPI
+  handheld panel goes dark); unplug it and it reboots back to the **640×480
+  internal screen**. After plugging in, the switch takes ~5 s to register, then a
+  normal reboot (~15 s). Live-switching the running session is unreliable on the
+  KMS stack, so a fresh boot — which always brings the display up correctly — is
+  used instead. The DPI overlay stays loaded in both modes (so the panel is never
+  left undriven), and the boot splash is shown right-side-up on whichever display
+  is active.
+
 **Build / system:**
 
 - Custom 64-bit kernel (Trixie, `rpi-6.18.y`); WiFi (RTL8723BS) and the
   `cs_battery` module rebuild via **DKMS**, surviving an `apt full-upgrade`
-- Bluetooth via `rtk_hciattach`; fan PWM control
+- Bluetooth via `rtk_hciattach`; temperature-based **on/off** fan control
+  (the fitted 2-wire blower must not be PWM-throttled on its supply)
 - EmulationStation pixel theme + instant transitions; rotated boot splash
 - First-boot partition resize + package install + one-time self-cleanup
 

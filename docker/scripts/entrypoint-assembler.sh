@@ -376,6 +376,43 @@ cp "$BINDIR/settings/cs_shutdown.sh" "$MNT_ROOT/opt/cs_shutdown.sh"
 cp "$BINDIR/settings/splashscreen.list" "$MNT_ROOT/etc/splashscreen.list"
 echo "[assembler] Boot splash set to kr_logo.png (via /etc/splashscreen.list)"
 
+# Splash orientation: point /etc/splashscreen.list at the image matching the
+# display this boot will use (HDMI = upright kr_logo_hdmi.png, DPI handheld =
+# pre-rotated kr_logo.png). Runs BEFORE asplashscreen reads the list, so the
+# splash is correct even after a power-cycle with a changed cable state (when no
+# hotplug ran to set it). Unknown/absent HDMI defaults to the DPI image, so the
+# handheld panel is always right-side-up.
+cat > "$MNT_ROOT/usr/local/bin/cs-splash-orient.sh" << 'SPLASHORIENT'
+#!/bin/bash
+if [ "$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null)" = "connected" ]; then
+    echo /home/pi/Circuit-Sword/settings/kr_logo_hdmi.png > /etc/splashscreen.list
+else
+    echo /home/pi/Circuit-Sword/settings/kr_logo.png > /etc/splashscreen.list
+fi
+SPLASHORIENT
+chmod +x "$MNT_ROOT/usr/local/bin/cs-splash-orient.sh"
+
+cat > "$MNT_ROOT/etc/systemd/system/cs-splash-orient.service" << 'SPLASHORIENTSVC'
+[Unit]
+Description=Set Circuit Sword boot splash orientation to match the active display
+DefaultDependencies=no
+After=console-setup.service
+Before=asplashscreen.service
+ConditionPathExists=/usr/local/bin/cs-splash-orient.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cs-splash-orient.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
+SPLASHORIENTSVC
+mkdir -p "$MNT_ROOT/etc/systemd/system/sysinit.target.wants"
+ln -sf /etc/systemd/system/cs-splash-orient.service \
+   "$MNT_ROOT/etc/systemd/system/sysinit.target.wants/cs-splash-orient.service"
+echo "[assembler] Installed cs-splash-orient.service (boot splash follows the display)"
+
 # Fix splashscreen sound
 for f in "$MNT_ROOT/etc/init.d/asplashscreen" \
          "$MNT_ROOT/opt/retropie/supplementary/splashscreen/asplashscreen.sh"; do
@@ -531,26 +568,21 @@ if [ -f "$LOCK" ]; then
 fi
 echo "$NOW" > "$LOCK"
 
-# Let the cable state settle (HPD fires a burst of events), then act only on a
-# real, stable change away from what we booted with.
-sleep 3
+# Act only on a real change away from what we booted with.
 CUR=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
 BOOT=$(cat /run/cs-hdmi-boot-state 2>/dev/null || echo unknown)
 [ "$BOOT" = "unknown" ] && exit 0
 [ "$CUR"  = "unknown" ] && exit 0
 [ "$CUR"  = "$BOOT" ]   && exit 0
+
+# Brief settle, then re-confirm the change is real and stable before rebooting.
+sleep 1
 CUR2=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
 [ "$CUR2" != "$CUR" ]   && exit 0
 [ "$CUR2" = "$BOOT" ]   && exit 0
 
-# Point the boot splash at the orientation matching the display we will boot into
-# (HDMI = upright kr_logo_hdmi.png, DPI = pre-rotated kr_logo.png for the panel).
-if [ "$CUR2" = "connected" ]; then
-    echo "/home/pi/Circuit-Sword/settings/kr_logo_hdmi.png" > /etc/splashscreen.list
-else
-    echo "/home/pi/Circuit-Sword/settings/kr_logo.png" > /etc/splashscreen.list
-fi
-
+# Splash orientation is set at boot by cs-splash-orient.service, so we don't
+# touch /etc/splashscreen.list here.
 logger -t cs-hdmi "HDMI changed ($BOOT -> $CUR2) — rebooting to switch display"
 # Save a running game before the reboot.
 [ -p /tmp/retroarch.fifo ] && { echo "SAVE_STATE" > /tmp/retroarch.fifo; sleep 0.5; }
