@@ -7,8 +7,10 @@ build.log
 *.img
 *.img.xz
 
-# WiFi credentials + user setup — edit these with real values, do not commit
-settings/network-config
+# User setup — edit with real values; do not commit your filled-in version.
+# settings/network-config ships with placeholders (JOUW_WIFI_NAAM/...), so it IS
+# tracked: the build needs it and a fresh clone must build. Put REAL credentials
+# in the network-config on the flashed boot partition, not in the repo copy.
 settings/user-data
 
 # Local AI-assistant context / tooling (not shared)

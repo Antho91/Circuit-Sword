@@ -9,12 +9,12 @@
 # what the old Gemba-in-Docker approach could not do.
 #
 # Input:  /output/rpios-base.img
-# Output: /output/rpios-bookworm.img
+# Output: /output/rpios-retropie.img
 # ============================================================
 set -euo pipefail
 
 BASE_IMG="/output/rpios-base.img"
-OUTPUT_IMG="/output/rpios-bookworm.img"
+OUTPUT_IMG="/output/rpios-retropie.img"
 MNT=/mnt/retropie-build
 EXTRA_GB=4
 

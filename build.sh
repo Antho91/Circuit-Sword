@@ -36,8 +36,10 @@ OUTPUT_DIR="$(cd "$(dirname "$0")" && pwd)/output"
 BT_BINARY="$OUTPUT_DIR/bt/rtk_hciattach"
 
 # ---- Colour helpers ----------------------------------------
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+# $'...' embeds the real ESC byte, so it doesn't depend on `echo -e` interpreting
+# backslash escapes (which varies between bash and dash/sh).
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
 info()    { echo -e "${CYAN}[build]${RESET} $*"; }
 success() { echo -e "${GREEN}[build]${RESET} $*"; }
 warn()    { echo -e "${YELLOW}[build]${RESET} $*"; }
@@ -109,8 +111,21 @@ build_bt() {
     success "rtk_hciattach saved to output/bt/rtk_hciattach"
 }
 
+# Ensure the host can build/run arm64 containers. Native on Apple Silicon /
+# arm64; on x86_64 Linux it needs QEMU binfmt handlers registered first.
+ensure_qemu_arm64() {
+    [ "$(uname -m)" = "aarch64" ] && return 0   # native arm64 — nothing to do
+
+    if [ ! -f /proc/sys/fs/binfmt_misc/qemu-aarch64 ]; then
+        info "Registering QEMU arm64 binfmt handlers (privileged container)..."
+        docker run --rm --privileged tonistiigi/binfmt --install arm64 \
+            || error "Failed to register QEMU arm64 binfmt. Try: sudo apt install qemu-user-static"
+    fi
+}
+
 build_hud() {
     info "=== Stage: hud ==="
+    ensure_qemu_arm64
     # Ensure buildx has an arm64-capable builder
     docker buildx inspect cs-builder >/dev/null 2>&1 \
         || docker buildx create --name cs-builder --use >/dev/null
@@ -171,9 +186,10 @@ build_sound() {
 
 build_assembler() {
     info "=== Stage: assembler (software) ==="
+    ensure_qemu_arm64
 
-    [ -f "$OUTPUT_DIR/rpios-bookworm.img" ] \
-        || error "output/rpios-bookworm.img not found. Run './build.sh retropie' first."
+    [ -f "$OUTPUT_DIR/rpios-retropie.img" ] \
+        || error "output/rpios-retropie.img not found. Run './build.sh retropie' first."
     [ -f "$OUTPUT_DIR/kernel/${KERNEL_NAME:-kernel8}.img" ] \
         || error "Kernel artifacts missing in output/kernel/. Run './build.sh kernel' first."
     [ -f "$OUTPUT_DIR/wifi/r8723bs.ko" ] \
@@ -249,7 +265,7 @@ build_retropie() {
         -v "$OUTPUT_DIR":/output \
         -v /dev:/dev \
         cs-build-retropie
-    success "RetroPie image saved to output/rpios-bookworm.img"
+    success "RetroPie image saved to output/rpios-retropie.img"
 }
 
 show_help() {
@@ -267,7 +283,7 @@ ${BOLD}Targets:${RESET}
   ${CYAN}bt${RESET}         Build rtk_hciattach from source → output/bt/rtk_hciattach
   ${CYAN}software${RESET}   Re-run assembler               → output/rpios-cs-final.img
   ${CYAN}download-base${RESET} Download Raspberry Pi OS Lite 64-bit  → output/rpios-base.img
-  ${CYAN}retropie${RESET}      Install RetroPie into base image       → output/rpios-bookworm.img
+  ${CYAN}retropie${RESET}      Install RetroPie into base image       → output/rpios-retropie.img
   ${CYAN}clean${RESET}      Remove all build outputs (keeps Docker image cache)
   ${CYAN}help${RESET}       Show this message
 
@@ -293,6 +309,14 @@ check_deps
 
 case "$TARGET" in
     all)
+        ensure_qemu_arm64
+        # The RetroPie base image is a slow, one-time stage that 'all' normally
+        # reuses. Build it automatically the first time so a clean checkout can
+        # just run './build.sh all' instead of failing on the missing image.
+        [ -f "$OUTPUT_DIR/rpios-retropie.img" ] || {
+            info "Base RetroPie image not found — running the one-time 'retropie' stage first (slow)..."
+            build_retropie
+        }
         build_kernel
         build_wifi
         # build_sound — skipped: snd-usb-audio volume-fix module isn't baked
@@ -319,8 +343,8 @@ case "$TARGET" in
                "$OUTPUT_DIR/hud" \
                "$OUTPUT_DIR/bt" \
                "$OUTPUT_DIR/rpios-cs-final.img"
-        warn "Kept output/rpios-bookworm.img (base image — slow to rebuild)."
-        warn "To also delete it: rm output/rpios-bookworm.img"
+        warn "Kept output/rpios-retropie.img (base image — slow to rebuild)."
+        warn "To also delete it: rm output/rpios-retropie.img"
         success "Clean done."
         ;;
     help|--help|-h) show_help ;;

@@ -13,7 +13,7 @@
 #  7. Outputs rpios-cs-final.img to /output/
 #
 # Expected files in /output/:
-#   rpios-bookworm.img      — base RetroPie image (from stage 1)
+#   rpios-retropie.img      — base RetroPie image (from stage 1)
 #   kernel/                 — kernel artifacts (from kernel stage)
 #   hud/cs-hud              — HUD binary (from hud stage)
 # ============================================================
@@ -21,7 +21,7 @@ set -euo pipefail
 
 OUTPUT=/output
 WORKSPACE=/workspace
-IMG_SRC="$OUTPUT/rpios-bookworm.img"
+IMG_SRC="$OUTPUT/rpios-retropie.img"
 IMG_DST="$OUTPUT/rpios-cs-final.img"
 
 MNT_BOOT=/mnt/cs-boot
@@ -161,7 +161,7 @@ echo "[assembler] cloud-init disabled (slow boot stages; not needed)"
 find "$MNT_ROOT/etc/netplan" -name '90-NM-*.yaml' -delete 2>/dev/null || true
 
 # Set pi user password and sudo directly — cloud-init does not update existing users,
-# and the pi user already exists in rpios-bookworm.img from the retropie build.
+# and the pi user already exists in rpios-retropie.img from the retropie build.
 PI_HASH='$6$PgBUYJMZ/hp0yJ3/$KokEwM.wyRM9BKnzJs38Gz5s6a6M/LYfKhc3M2hWF7A2bajXZcqzhwTBWAs.ubUpLIIcL7bRuPyI/PGJDQZrJ.'
 if grep -q "^pi:" "$MNT_ROOT/etc/shadow" 2>/dev/null; then
     sed -i "s|^pi:[^:]*:|pi:${PI_HASH}:|" "$MNT_ROOT/etc/shadow"
@@ -392,8 +392,28 @@ sed -i 's/127.0.1.1.*/127.0.1.1\tCircuitSword/' "$MNT_ROOT/etc/hosts" 2>/dev/nul
 # can edit their SSID/password from any PC. cs-firstboot-wifi.service reads it and
 # configures NetworkManager on every boot. (cloud-init is disabled — see above —
 # so its user-data/meta-data are no longer written.)
-cp "$BINDIR/settings/network-config" "$MNT_BOOT/network-config"
-echo "[assembler] network-config copied to boot partition (read by cs-firstboot-wifi)"
+# network-config ships with placeholders and is tracked in git, so it's normally
+# present. Fall back to a placeholder if it's missing for any reason, rather than
+# hard-failing the whole build at the very last step.
+if [ -f "$BINDIR/settings/network-config" ]; then
+    cp "$BINDIR/settings/network-config" "$MNT_BOOT/network-config"
+    echo "[assembler] network-config copied to boot partition (read by cs-firstboot-wifi)"
+else
+    cat > "$MNT_BOOT/network-config" << 'NETCFG'
+network:
+  version: 2
+  renderer: NetworkManager
+  wifis:
+    wlan0:
+      dhcp4: true
+      optional: true
+      access-points:
+        "YOUR_WIFI_NAME":
+          password: "YOUR_WIFI_PASSWORD"
+      regulatory-domain: NL
+NETCFG
+    echo "[assembler] settings/network-config missing — wrote a placeholder to the boot partition"
+fi
 
 # Circuit Sword runtime config (MODE, CLONER, TESTER, STARTUPEXEC)
 # Sourced by autostart.sh on each boot. Edit to change boot mode.

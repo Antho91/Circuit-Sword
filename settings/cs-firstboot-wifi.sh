@@ -15,7 +15,7 @@ log() { echo "[cs-wifi] $*"; logger -t cs-wifi "$*" 2>/dev/null || true; }
 SSID=$(grep -A3 'access-points:' "$NETCFG" | grep -oE '"[^"]+"' | head -1 | tr -d '"')
 PSK=$(grep 'password:' "$NETCFG" | head -1 | sed -E 's/.*password:[[:space:]]*//' | tr -d '"')
 
-if [ -z "$SSID" ] || [ "$SSID" = "JOUW_WIFI_NAAM" ]; then
+if [ -z "$SSID" ] || [ "$SSID" = "YOUR_WIFI_NAME" ]; then
     log "no real SSID set in network-config — skipping"
     exit 0
 fi

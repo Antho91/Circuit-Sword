@@ -13,7 +13,7 @@ a custom kernel + WiFi/BT drivers.
    [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or balenaEtcher
    (both read `.xz` directly — no need to unpack).
 2. Open the boot partition (visible on any OS) and edit **`network-config`** —
-   replace `JOUW_WIFI_NAAM` / `JOUW_WIFI_WACHTWOORD` with your WiFi SSID and
+   replace `YOUR_WIFI_NAME` / `YOUR_WIFI_PASSWORD` with your WiFi SSID and
    password.
 3. Insert the SD card and power on.
 4. **First boot takes a few minutes (needs WiFi)** — automatically:
@@ -60,6 +60,12 @@ The image ships with the standard Raspberry Pi OS credentials:
 ./build.sh retropie   # download RPi OS + install RetroPie base (~1h, rarely needed)
 ./build.sh all        # kernel + WiFi + HUD + Bluetooth → assemble
 ```
+
+`./build.sh all` also builds the RetroPie base (`output/rpios-retropie.img`) by
+itself if it's missing, so on a clean checkout you can skip straight to it; the
+explicit `retropie` step above just lets you (re)build that slow stage on its own.
+On x86_64 Linux the build registers QEMU arm64 emulation automatically (Apple
+Silicon runs arm64 natively).
 
 The final image lands at `output/rpios-cs-final.img`.
 
