@@ -24,6 +24,7 @@ a custom kernel + WiFi/BT drivers.
    - the board reboots once into the stock kernel.
 5. After that EmulationStation starts automatically. In EmulationStation, press
    the **menu button** for the on-screen HUD (battery / WiFi / volume / brightness).
+   DISCLAMER: The on-screen HUD menu, only works in ES, so not in a emulator. There you can use the button combo's for adjusting sound and brightness etc. Read below why.
 
 > `config-cs.txt` on the boot partition controls the boot mode without rebuilding
 > the image.
