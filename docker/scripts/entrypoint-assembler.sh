@@ -30,7 +30,6 @@ MNT_ROOT=/mnt/cs-root
 KERNEL_ARTIFACTS="$OUTPUT/kernel"
 HUD_BINARY="$OUTPUT/hud/cs-hud"
 WIFI_ARTIFACTS="$OUTPUT/wifi"
-SOUND_ARTIFACTS="$OUTPUT/sound"
 BT_BINARY="$OUTPUT/bt/rtk_hciattach"
 
 KERNEL_NAME="${KERNEL_NAME:-kernel8}"
@@ -253,7 +252,6 @@ rsync -a --delete \
     --exclude='docker/' \
     --exclude='build/' \
     --exclude='wifi-driver/' \
-    --exclude='sound-module/' \
     --exclude='.claude/' \
     --exclude='docker-compose.yml' \
     --exclude='build.sh' \
@@ -970,27 +968,54 @@ if command -v dkms >/dev/null 2>&1 && [ -d /usr/src/cs-battery-0.1.0 ]; then
     fi
 fi
 
-# --- 3. Kernel headers (may pull a stock kernel; dkms now builds r8723bs for it)
-# The headers metapackages track the kernel ABI so future upgrades pull matching
-# headers. If installing them pulls a stock kernel now, its postinst.d/dkms hook
-# builds r8723bs for it (registered above) → WiFi works on the next boot.
-echo "[cs-firstboot] Installing kernel + building WiFi/battery modules (a few minutes)..."
-apt-get install -y --no-install-recommends $APT_KEEPCONF \
-    linux-headers-rpi-v8 linux-headers-rpi-2712 \
-    || echo "[cs-firstboot] WARNING: headers incomplete"
-echo "[cs-firstboot] Kernel modules built."
+# --- 3. Hand off from the bootstrap (custom) kernel to the STOCK kernel ------
+# The custom kernel exists ONLY to give WiFi during THIS first boot. The end state
+# is the apt-managed STOCK kernel at kernel8.img, so a future `apt full-upgrade`
+# pulls and runs new kernels, with WiFi + battery rebuilt by DKMS each time.
+#
+# The image builder stripped the stock kernel's files (modules + headers) to keep
+# the image small, but left the packages marked "installed" in dpkg — so a plain
+# apt-install is a no-op. Force-reinstall the versioned stock kernel + BOTH header
+# packages (arch '-rpi-v8' AND the shared '-common-rpi' that carries the Makefile
+# DKMS needs). That restores /lib/modules/<stock> + headers, rebuilds r8723bs +
+# cs_battery for the stock kernel (registered above), and writes the stock kernel
+# to /boot/firmware/kernel8.img (raspi-firmware). So the next reboot runs stock.
+echo "[cs-firstboot] Handing off custom -> stock kernel (restore + build modules; a few minutes)..."
 
-# (No explicit `dkms autoinstall` here: the kernel package's own postinst.d/dkms
-# hook already builds r8723bs for each stock kernel as it installs above. Running
-# autoinstall again only tries the running CUSTOM kernel — which has no headers
-# package — and logs a harmless but confusing error.)
+STOCK_IMG=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | grep -E '^linux-image-[0-9].*\+rpt-rpi-v8$' | head -1)
+STOCK_HDR=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | grep -E '^linux-headers-[0-9].*\+rpt-rpi-v8$' | head -1)
+STOCK_COMMON=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | grep -E '^linux-headers-[0-9].*\+rpt-common-rpi$' | head -1)
 
-# --- 3b. Do NOT purge the stock kernel. ------------------------------------
-# The custom kernel is only a bootstrap (WiFi on first boot). apt owns
-# kernel8.img from here: a later full-upgrade overwrites it with a newer stock
-# kernel and the dkms hook rebuilds r8723bs in the same transaction. The old
-# purge deleted /boot/firmware/kernel8.img via linux-image's postrm — that was
-# the black-screen bug.
+if [ -n "$STOCK_IMG" ] && [ -n "$STOCK_HDR" ] && [ -n "$STOCK_COMMON" ]; then
+    STOCK_KVER=${STOCK_IMG#linux-image-}
+    echo "[cs-firstboot] stock kernel = $STOCK_KVER"
+
+    # Keep the bootstrap (custom, WiFi-capable) kernel so we can fall back if the
+    # stock build yields no WiFi module — never reboot into a WiFi-less kernel.
+    cp -a /boot/firmware/kernel8.img /boot/firmware/kernel8-cs-bootstrap.img 2>/dev/null || true
+
+    # Apply the WiFi compat.h shim first, so the dkms build the reinstall triggers
+    # has it (the refresh hook normally only runs on a kernel-image postinst).
+    [ -x /etc/kernel/postinst.d/cs-dkms-refresh ] && /etc/kernel/postinst.d/cs-dkms-refresh "$STOCK_KVER" || true
+
+    apt-get install --reinstall -y $APT_KEEPCONF "$STOCK_COMMON" "$STOCK_HDR" "$STOCK_IMG" \
+        || dpkg --configure -a || true
+    # Idempotent guarantee, independent of apt's internal hook ordering.
+    dkms autoinstall -k "$STOCK_KVER" 2>&1 | sed 's/^/[cs-firstboot] dkms: /' || true
+
+    if [ -f "/lib/modules/$STOCK_KVER/updates/dkms/r8723bs.ko" ] \
+       || [ -f "/lib/modules/$STOCK_KVER/updates/dkms/r8723bs.ko.xz" ]; then
+        echo "[cs-firstboot] OK — WiFi + battery built for stock $STOCK_KVER; rebooting onto stock."
+        # raspi-firmware wrote the stock kernel to kernel8.img during the reinstall.
+    else
+        echo "[cs-firstboot] WARNING: r8723bs missing for stock $STOCK_KVER — keeping custom kernel (WiFi safe)."
+        cp -a /boot/firmware/kernel8-cs-bootstrap.img /boot/firmware/kernel8.img 2>/dev/null || true
+    fi
+else
+    echo "[cs-firstboot] WARNING: could not resolve stock kernel packages — staying on custom kernel."
+fi
+
+# Stale-kernel marker is obsolete now (we keep, never purge, the stock kernel).
 rm -f /var/lib/cs-stale-kernels
 
 # --- 4. Optional helpers + Samba --------------------------------------------
