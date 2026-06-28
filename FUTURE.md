@@ -83,36 +83,17 @@ and needs its own compat shims, so it offers little over the staging driver.
 Mainline rtw88 supports 8723**CS/DS** but **not** 8723**BS** (SDIO), so an
 out-of-tree driver stays necessary either way.
 
-## snd-usb-audio volume range: verify the patch is even needed (likely not)
+## snd-usb-audio volume fix — RESOLVED, patch not needed (dropped)
 
-**Today:** audio works on any kernel via the stock in-kernel `snd-usb-audio`
-module (drives the C-Media CM103+ USB chip). The old patched *volume-fix* module
-is deliberately **not baked in** — its pre-built `.ko` had a vermagic/symbol
-mismatch that blocked the stock module → no audio, it doesn't build on 6.18
-(`from_timer`), and with DKMS `AUTOINSTALL` its failed rebuild poisoned first boot.
+Verified on hardware: the stock in-kernel `snd-usb-audio` module gives a fully
+usable volume range on the C-Media USB chip (ALSA card 1, `PCM` control,
+`amixer -c1 sget PCM` → range `0–9472`, ~`-27.75 dB` at 25%). The old 32-bit
+build needed a patched module to widen a cramped range; the modern stock driver
+does not. The patched module, the `sound` build stage, and the `sound-module/`
+source have been **removed** from the repo. Audio just works on stock.
 
-**Open question — is the volume patch still needed at all?** The patch only
-remapped the chip's volume *range/curve* (the old 32-bit build had an unusably
-small usable range). It was never confirmed that the modern stock driver has the
-same problem on this hardware, and mainline `snd-usb-audio` has gained C-Media
-volume quirks over the years — so the stock driver may already be fine. **Verify
-on the device before porting anything:**
-```bash
-amixer -c 1 scontrols          # which control does the USB card expose?
-amixer -c 1 sget <control>     # inspect the dB range — is it usable?
-speaker-test -c2 -twav -l1     # audible difference across the range?
-```
-- Range usable → the patch is **unnecessary**: delete this item and the
-  `sound-module/` source.
-- Range cramped into the top few % → port the patch (source under
-  `sound-module/snd-usb-audio-0.1/`, `Makefile.dkms`) and flip `AUTOINSTALL`
-  back to `yes` in both `sound-module/dkms.conf` files. WiFi DKMS must never
-  depend on this module.
-
-**Don't confuse this with the cs-hud volume bug below.** Even with a perfect
-kernel module, cs-hud currently aims `amixer` at the wrong card/control. That
-~2-line software fix is the *real* first action and is independent of the kernel
-module — fix and confirm that before deciding the kernel patch is needed.
+The remaining audio TODO is the cs-hud volume bug below (a software fix, not a
+kernel module).
 
 ## VERIFY: DKMS build at -j2 survives an apt kernel upgrade
 
@@ -184,15 +165,13 @@ as a dead-code cleanup candidate below).
   menu button (serial `CMD_GET_STATUS` bit 0). Flip in code if a board behaves
   inverted.
 
-- **cs-hud volume control doesn't change the USB audio.** ← *do this first; it's
-  independent of (and a prerequisite for judging) the snd-usb-audio kernel patch
-  above.* Brightness works;
-  volume doesn't. `hardware_get_volume`/`hardware_set_volume` (`cs-hud_new/src/hardware.c`)
-  call `amixer sget/sset PCM` on the *default* card. The C-Media USB card (now
-  ALSA card 1, after the audio-routing fix) may not have a control named `PCM`
-  (often it's `Speaker`/`Headphone`/`Auto Gain Control`). Fix: point amixer at the
-  right card + control, e.g. `amixer -c 1 sset <Control> N%` — confirm the control
-  name with `amixer -c 1 scontrols`. Likely a 2-line change.
+- **cs-hud volume control doesn't change the USB audio.** Brightness works;
+  volume doesn't. `hardware_get_volume`/`hardware_set_volume`
+  (`cs-hud_new/src/hardware.c`) call `amixer sget/sset PCM` on the *default* card
+  — which is the HDMI card (card 0). The C-Media USB chip is **ALSA card 1** and
+  *does* expose a working `PCM` control (confirmed on hardware). Fix: point amixer
+  at card 1, e.g. `amixer -c 1 sset PCM N%` / `amixer -c 1 sget PCM`. ~2-line
+  change.
 
 - **Laggy transitions in the RetroPie config menu (ES → audio/wifi/bluetooth).**
   Opening one config item, going back, then opening another (e.g. audio → back →
@@ -236,10 +215,11 @@ A lot was iterated on quickly ("vibe coded") — worth a pass to delete what's n
 longer used. Do this carefully (the build works); verify each before removing.
 
 **Already cleaned this round:**
-- The `sound` stage is no longer baked or required by the assembler/`all`
-  (`build.sh`): the patched snd-usb-audio.ko had a vermagic mismatch that blocked
-  audio. The `sound` target + `sound-module/` source are KEPT for the future
-  volume-fix port, just not built by default.
+- The `sound` stage and `sound-module/` source are **removed** entirely
+  (`build.sh` `sound` target, `build_sound`, `docker/Dockerfile.sound`,
+  `docker/scripts/build-sound-module.sh`). Audio runs on the stock in-kernel
+  `snd-usb-audio` driver; the patched volume-fix is confirmed unnecessary on this
+  hardware (usable PCM range on card 1).
 
 **Candidates to audit (verify references, then remove if dead):**
 - **`build/` legacy scripts** (`1_build_retropie.sh`, `2_upgrade_patch_kernel_64bit.sh`,

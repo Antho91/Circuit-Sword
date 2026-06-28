@@ -9,7 +9,6 @@
 #   all        Full build: kernel + wifi + hud + bt → assembler
 #   kernel     Rebuild kernel only      (output/kernel/)
 #   wifi       Rebuild WiFi DKMS module (output/wifi/)   ← needs kernel first
-#   sound      Rebuild snd-usb-audio DKMS module (output/sound/) ← needs kernel first
 #   hud        Rebuild cs-hud_new only  (output/hud/cs-hud)
 #   software   Re-run assembler         (kernel+wifi+hud must exist)
 #   retropie   Build base RetroPie image (very slow, rarely needed)
@@ -165,25 +164,6 @@ build_wifi() {
     success "WiFi module saved to output/wifi/"
 }
 
-build_sound() {
-    info "=== Stage: sound (snd-usb-audio DKMS module) ==="
-
-    [ -f "$OUTPUT_DIR/kernel/${KERNEL_NAME:-kernel8}.img" ] \
-        || error "Kernel artifacts missing in output/kernel/. Run './build.sh kernel' first."
-
-    docker build \
-        -f docker/Dockerfile.sound \
-        -t cs-build-sound \
-        .
-    docker run --rm \
-        -v "$OUTPUT_DIR":/output \
-        -v cs-kernel-cache:/cache \
-        -v "$(pwd)":/workspace:ro \
-        -e KSRC=/cache/linux \
-        cs-build-sound
-    success "Sound module saved to output/sound/"
-}
-
 build_assembler() {
     info "=== Stage: assembler (software) ==="
     ensure_qemu_arm64
@@ -194,10 +174,9 @@ build_assembler() {
         || error "Kernel artifacts missing in output/kernel/. Run './build.sh kernel' first."
     [ -f "$OUTPUT_DIR/wifi/r8723bs.ko" ] \
         || error "WiFi module missing in output/wifi/. Run './build.sh wifi' first."
-    # NOTE: snd-usb-audio (sound stage) is NOT required — we no longer bake the
-    # patched volume-fix module (vermagic mismatch blocked audio); the stock
-    # in-kernel snd-usb-audio drives the chip. The 'sound' target stays available
-    # for the future port (see FUTURE.md) but is not part of the assembler/all.
+    # NOTE: audio runs on the stock in-kernel snd-usb-audio driver — no custom
+    # sound module is built or baked (the stock volume range is fine on this
+    # hardware; the old patched volume-fix module has been removed).
     [ -f "$OUTPUT_DIR/hud/cs-hud" ] \
         || error "HUD binary missing in output/hud/. Run './build.sh hud' first."
     [ -f "$BT_BINARY" ] \
@@ -278,7 +257,6 @@ ${BOLD}Targets:${RESET}
   ${CYAN}all${RESET}        Full build: kernel + wifi + hud + bt → assembler
   ${CYAN}kernel${RESET}     Rebuild kernel only            → output/kernel/
   ${CYAN}wifi${RESET}       Rebuild WiFi DKMS module       → output/wifi/   (needs kernel)
-  ${CYAN}sound${RESET}      Rebuild snd-usb-audio module   → output/sound/  (needs kernel)
   ${CYAN}hud${RESET}        Rebuild cs-hud_new only        → output/hud/cs-hud
   ${CYAN}bt${RESET}         Build rtk_hciattach from source → output/bt/rtk_hciattach
   ${CYAN}software${RESET}   Re-run assembler               → output/rpios-cs-final.img
@@ -319,9 +297,6 @@ case "$TARGET" in
         }
         build_kernel
         build_wifi
-        # build_sound — skipped: snd-usb-audio volume-fix module isn't baked
-        # (stock in-kernel driver is used). Run './build.sh sound' only when
-        # working on the future port. See FUTURE.md.
         build_hud
         build_bt
         build_assembler
@@ -329,7 +304,6 @@ case "$TARGET" in
         ;;
     kernel)   build_kernel   ;;
     wifi)     build_wifi     ;;
-    sound)    build_sound    ;;
     hud)      build_hud      ;;
     bt)       build_bt       ;;
     software) build_assembler ;;
@@ -339,7 +313,6 @@ case "$TARGET" in
         info "Removing build outputs..."
         rm -rf "$OUTPUT_DIR/kernel" \
                "$OUTPUT_DIR/wifi" \
-               "$OUTPUT_DIR/sound" \
                "$OUTPUT_DIR/hud" \
                "$OUTPUT_DIR/bt" \
                "$OUTPUT_DIR/rpios-cs-final.img"
