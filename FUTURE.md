@@ -16,31 +16,15 @@ correctly — is used instead. Kept here only so the idea isn't re-opened.
 
 ---
 
-## HUD menu overlay on KMS (hard problem — deferred)
+## HUD menu overlay over a running emulator (not possible on KMS)
 
-The cs-hud **button is detected fine** and the daemon runs, but the SDL2 overlay
-menu (`menu_show`) fails with `SDL_Init: kmsdrm not available` while
-EmulationStation / RetroArch owns the display.
-
-**Why:** with `vc4-kms-v3d`, the app on the active VT (ES on tty1) is the DRM
-*master*. cs-hud runs as a headless systemd service with no VT/logind session, so
-it cannot become DRM master to draw the overlay. Setting
-`SDL_KMSDRM_REQUIRE_DRM_MASTER=0` did **not** help (you still can't mode-set
-without master). The original cs-hud overlaid via the legacy graphics stack
-(dispmanx/fb), which composited layers — that model is gone under full KMS.
-
-**Options to try later:**
-1. **VT switch with a real session:** give cs-hud its own VT/logind seat so it can
-   switch VT → become DRM master → render → switch back (the dance `menu_show`
-   already attempts but can't complete from a bare service).
-2. **Launch cs-hud from the ES session** (autostart.sh on tty1) instead of a
-   service — but then it doesn't run during boot/console (auto-shutdown gap).
-   Could split: a headless service for power/fan/shutdown + a session-launched
-   piece for the menu.
-3. **Pivot the menu to RetroArch's own quick-menu** (map a hotkey) for
-   volume/brightness, and keep cs-hud headless (battery sysfs, fan, shutdown).
-   Brightness is already a hardware/MCU button. This sidesteps KMS entirely and
-   is probably the most robust.
+In EmulationStation the cs-hud menu **works** (VT hand-off → SDL2/KMSDRM becomes
+DRM master → renders → hands back). What is **not** possible is drawing the menu
+*on top of a running emulator*: full KMS has no DispmanX overlay layer and the
+emulator owns the DRM master on the single connector. In-game info comes from
+RetroArch's own menu instead (battery + clock via the `cs_battery` power-supply
+module). This is a documented limitation (README "Known issues"), not a TODO —
+kept here only for context.
 
 ## WiFi driver: switch to the maintained rtw88 port (drop our compat.h shims)
 
@@ -95,16 +79,13 @@ source have been **removed** from the repo. Audio just works on stock.
 The remaining audio TODO is the cs-hud volume bug below (a software fix, not a
 kernel module).
 
-## VERIFY: DKMS build at -j2 survives an apt kernel upgrade
+## DKMS build at -j2 — RESOLVED (validated on hardware)
 
-`parallel_jobs=2` is now set (`cs-firstboot.sh`), with zram (~1GB) + 512MB SD
-swap for headroom. The memory math supports it (2× cc1 ≈ 750M vs 731M RAM →
-light zram swap), but it has **not been validated on hardware** that an actual
-`apt full-upgrade` rebuild completes at -j2 (only -j1 was proven). On the next
-fresh image: after first boot, run `sudo apt full-upgrade` and confirm the
-`rtl8723bs` DKMS rebuild finishes without `cc1 Killed`. If it OOMs, drop
-`parallel_jobs` back to `1` in `cs-firstboot.sh` (proven safe). Do NOT go to -j3+
-— three compiles exceed physical RAM and thrash on zram.
+`parallel_jobs=2` is set (`cs-firstboot.sh`) with zram + ~1.5 GB swap headroom.
+Confirmed on the real CM3 (1 GB RAM): the first-boot kernel handoff builds both
+`rtl8723bs` and `cs_battery` at `-j2` (make.log shows `make -j2`) without
+`cc1 Killed`/OOM, and `dmesg` shows no oom-kill. Do NOT go to -j3+ — three
+compiles exceed physical RAM and thrash on zram.
 
 ## On-device update script (refresh components without a reflash)
 
@@ -138,12 +119,6 @@ as a dead-code cleanup candidate below).
 
 ## Cosmetic / minor (deferred)
 
-- **Boot splash is upside down.** The DPI overlay uses `rotate=180`
-  (`settings/boot/config.txt`). EmulationStation is KMS-aware and rotates
-  correctly, but the early framebuffer splash (`asplashscreen`, fbi on /dev/fb0)
-  ignores the KMS plane rotation. Fix options: `fbcon=rotate:2` in `cmdline.txt`
-  for the text console, and/or pre-rotate the splash image 180°.
-
 - **Screen flickers when HDMI display dims/blanks.** After an idle timeout the
   display power-management blanks/dims the screen; on wake the picture is fine,
   but the blank→wake transition flickers (a KMS mode re-set on the HDMI output).
@@ -151,14 +126,6 @@ as a dead-code cleanup candidate below).
   (`consoleblank=0` in `cmdline.txt`, or `setterm -blank 0 -powerdown 0`),
   disable DPMS on the HDMI connector, and/or tune EmulationStation's screensaver
   so the OS-level blank never triggers.
-
-- **Bluetooth — RESOLVED.** The RTL8723BS BT works: `rtl-bluetooth.service`
-  (`rtk_hciattach`) attaches `hci0` and loads firmware, scanning/discovery works.
-  The earlier `Failed to set mode (0x03)` was just the adapter coming up rfkill
-  **soft-blocked**. Now handled in the build: `rtl-bluetooth.service` runs
-  `rfkill unblock bluetooth` (ExecStartPost) and the assembler sets
-  `AutoEnable=true` in `/etc/bluetooth/main.conf`, so bluetoothd powers the
-  adapter on at boot and a `trust`ed controller reconnects automatically.
 
 - **HUD hardware polarities to confirm on real hardware:** fan (active-LOW
   assumption in `hardware_set_fan`), power switch (GPIO 37 ON=HIGH assumption),
@@ -230,12 +197,6 @@ longer used. Do this carefully (the build works); verify each before removing.
   `cs-osd.service` (the *old* HUD service name) and git-pulls + re-runs the manual
   install flow. Not used by the Docker-image pipeline and almost certainly broken
   against the current image. Verify, then likely remove.
-- **The `minimal` build path** — ✅ REMOVED this session (with `custom.toml`,
-  `docker/{Dockerfile.minimal,scripts/entrypoint-minimal.sh}`, and the minimal-only
-  `settings/cs-firstboot-packages.*` + `settings/cs-dkms-firstboot.service`). The
-  old 32-bit DispmanX `cs-hud/` was removed too — `cs-hud_new/` is the active HUD.
-- **`settings/reboot_to_hdmi.*`** — check whether the reboot-to-HDMI flow is still
-  wired up / wanted, vs. superseded by the (deferred) HDMI-hotplug idea.
 - **Orphaned `settings/` files** — grep each `settings/*` against
   `entrypoint-assembler.sh`; anything not copied/referenced is a candidate.
 - **Stale comments** — several were updated this session; a sweep for others that
