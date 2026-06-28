@@ -985,26 +985,13 @@ echo "[cs-firstboot] Kernel modules built."
 # autoinstall again only tries the running CUSTOM kernel — which has no headers
 # package — and logs a harmless but confusing error.)
 
-# --- 3b. Purge the stale base-image kernel(s) whose modules were stripped at
-# build time (see /var/lib/cs-stale-kernels). Their packages are still registered
-# in dpkg, so every later update-initramfs warns "missing /lib/modules/<ver>".
-# Purging the packages cleans the dpkg state. SAFE: never the running kernel (we
-# boot the custom kernel from kernel8.img), and a stock kernel was just installed
-# above via the headers, so a valid apt-managed kernel exists.
-if [ -s /var/lib/cs-stale-kernels ]; then
-    PURGE=""
-    while read -r kn; do
-        [ -n "$kn" ] && [ "$kn" != "$(uname -r)" ] || continue
-        dpkg -s "linux-image-$kn"   >/dev/null 2>&1 && PURGE="$PURGE linux-image-$kn"
-        dpkg -s "linux-headers-$kn" >/dev/null 2>&1 && PURGE="$PURGE linux-headers-$kn"
-    done < /var/lib/cs-stale-kernels
-    if [ -n "$PURGE" ]; then
-        echo "[cs-firstboot] Purging stale kernel packages:$PURGE"
-        apt-get purge -y $APT_KEEPCONF $PURGE \
-            || echo "[cs-firstboot] stale-kernel purge incomplete (non-fatal)"
-    fi
-    rm -f /var/lib/cs-stale-kernels
-fi
+# --- 3b. Do NOT purge the stock kernel. ------------------------------------
+# The custom kernel is only a bootstrap (WiFi on first boot). apt owns
+# kernel8.img from here: a later full-upgrade overwrites it with a newer stock
+# kernel and the dkms hook rebuilds r8723bs in the same transaction. The old
+# purge deleted /boot/firmware/kernel8.img via linux-image's postrm — that was
+# the black-screen bug.
+rm -f /var/lib/cs-stale-kernels
 
 # --- 4. Optional helpers + Samba --------------------------------------------
 # kbd provides openvt, which the cs-hud daemon uses to launch its on-screen menu
