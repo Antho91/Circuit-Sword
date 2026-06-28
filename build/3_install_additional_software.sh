@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# === BASISCONFIG ===
+# === BASE CONFIG ===
 IMG="rpios-bookworm64bit.img"
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 START_FOLDER="$BASE_DIR/build"
@@ -34,7 +34,7 @@ echo "✅ Mounted drives:"
 echo "  BOOT: $bootp"
 echo "  ROOT: $rootp"
 
-# === Handige helperfunctie ===
+# === Handy helper function ===
 execute() {
     echo "➡️  $1"
     eval "$1"
@@ -58,7 +58,7 @@ pi_uid=$(stat -c "%u" "$MNT_ROOT/home/pi")
 pi_gid=$(stat -c "%g" "$MNT_ROOT/home/pi")
 execute "chown -R $pi_uid:$pi_gid $PIHOMEDIR/Circuit-Sword"
 
-# === CONFIG COPY STAP 1 ===
+# === CONFIG COPY STEP 1 ===
 if ! exists "$MNT_BOOT/config_ORIGINAL.txt"; then
   execute "cp $MNT_BOOT/config.txt $MNT_BOOT/config_ORIGINAL.txt"
   execute "cp $BINDIR/settings/boot/* $MNT_BOOT/"
@@ -120,20 +120,18 @@ if exists "$MNT_ROOT/opt/retropie/configs/all/emulationstation/es_settings.cfg";
   execute "echo '<string name=\"AudioDevice\" value=\"PCM\" />' >> $MNT_ROOT/opt/retropie/configs/all/emulationstation/es_settings.cfg"
 fi
 
-# 5. Reboot to HDMI
-execute "cp $BINDIR/settings/reboot_to_hdmi.sh $PIHOMEDIR/RetroPie/retropiemenu/reboot_to_hdmi.sh"
-execute "cp -p $BINDIR/settings/reboot_to_hdmi.png $PIHOMEDIR/RetroPie/retropiemenu/icons/reboot_to_hdmi.png"
-if ! grep -q "reboot_to_hdmi" "$MNT_ROOT/opt/retropie/configs/all/emulationstation/gamelists/retropie/gamelist.xml"; then
-  execute "sed -i 's|</gameList>|  <game>\\n    <path>./reboot_to_hdmi.sh</path>\\n    <name>One Time Reboot to HDMI</name>\\n    <desc>Enable HDMI and automatically reboot for it to apply. The subsequent power cycle will revert back to the internal screen. It is normal when enabled for the internal screen to remain grey/white.</desc>\\n    <image>/home/pi/RetroPie/retropiemenu/icons/reboot_to_hdmi.png</image>\\n  </game>\\n</gameList>|g' $MNT_ROOT/opt/retropie/configs/all/emulationstation/gamelists/retropie/gamelist.xml"
-fi
+# 5. (Removed: "One Time Reboot to HDMI" menu entry — HDMI/DPI switching is now
+#    automatic on cable hotplug via cs-hdmi-hotplug.sh. The old menu ran
+#    reboot_to_hdmi.py, which comments out the DPI overlay and would reintroduce
+#    the stuck-panel artifacts the new approach avoids.)
 
-# 6. Autosave aanzetten
+# 6. Enable autosave
 execute "sed -i 's/# autosave_interval =/autosave_interval = \"30\"/' $MNT_ROOT/opt/retropie/configs/all/retroarch.cfg"
 
 # Other tweaks
 
 
-# 7. Systeemspecifieke tweaks
+# 7. System-specific tweaks
 execute "mkdir -p $MNT_ROOT/lib/firmware/rtl_bt/"
 execute "cp $BINDIR/bt-driver/rtlbt_* $MNT_ROOT/lib/firmware/rtl_bt/"
 execute "sed -i 's/console=serial0,115200 //' $MNT_BOOT/cmdline.txt || true"
@@ -155,7 +153,7 @@ if ! grep -q '/ramdisk' "$MNT_ROOT/etc/fstab"; then
   execute "echo 'tmpfs    /ramdisk    tmpfs    defaults,noatime,nosuid,size=100k    0 0' >> $MNT_ROOT/etc/fstab"
 fi
 
-# 9. HUD en BT services
+# 9. HUD and BT services
 execute "rm -f $MNT_ROOT/etc/systemd/system/cs-hud.service"
 execute "rm -f $MNT_ROOT/etc/systemd/system/multi-user.target.wants/cs-hud.service"
 execute "rm -f $SYSTEMD/cs-hud.service"
@@ -166,7 +164,7 @@ execute "cp $BINDIR/bt-driver/rtl-bluetooth.service $MNT_ROOT/lib/systemd/system
 execute "cp $BINDIR/bt-driver/rtk_hciattach $MNT_ROOT/usr/bin/rtk_hciattach"
 execute "chmod 755 $MNT_ROOT/usr/bin/rtk_hciattach"
 
-# Maak symlinks relatief binnen de image
+# Make symlinks relative within the image
 execute "ln -sf /lib/systemd/system/cs-hud.service $MNT_ROOT/etc/systemd/system/cs-hud.service"
 execute "ln -sf /lib/systemd/system/cs-hud.service $MNT_ROOT/etc/systemd/system/multi-user.target.wants/cs-hud.service"
 execute "ln -sf /lib/systemd/system/rtl-bluetooth.service $MNT_ROOT/etc/systemd/system/rtl-bluetooth.service"
@@ -174,13 +172,13 @@ execute "ln -sf /lib/systemd/system/rtl-bluetooth.service $MNT_ROOT/etc/systemd/
 
 #execute "cp $BINDIR/dpi-cloner/dpi-cloner.service $SYSTEMD/dpi-cloner.service"
 
-# Vervang chroot systemctl enable door handmatige symlink
+# Replace chroot systemctl enable with a manual symlink
 if [ ! -e "$MNT_ROOT/etc/systemd/system/multi-user.target.wants/resize2fs_once.service" ]; then
   execute "ln -sf /lib/systemd/system/resize2fs_once.service $MNT_ROOT/etc/systemd/system/multi-user.target.wants/resize2fs_once.service"
 fi
 
 # === ADD SAMBA USER ===
-echo "🔑 Samba user toevoegen..."
+echo "🔑 Adding Samba user..."
 execute "chroot $MNT_ROOT bash -c \"echo -e 'raspberry\nraspberry' | smbpasswd -a -s pi\""
 
 # === Unmount mounts ===
@@ -191,4 +189,4 @@ dev=$(losetup -j "$IMG" | cut -d: -f1)
 [ -n "$dev" ] && sudo kpartx -dv "$dev" 2>/dev/null
 sudo losetup -D 2>/dev/null
 
-echo "✅ Alles geïnstalleerd en geconfigureerd!"
+echo "✅ Everything installed and configured!"

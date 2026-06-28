@@ -148,7 +148,7 @@ sleep 2
 
 # Reset the AVR
 echo "Resetting Arduino.."
-python - <<END
+python3 - <<END
 import serial
 import time
 import os

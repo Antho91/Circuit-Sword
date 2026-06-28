@@ -1,0 +1,27 @@
+# ============================================================
+# RTL8723BS WiFi DKMS module builder
+#
+# Extends cs-build-base (same ARM64 cross-compile toolchain).
+# Requires the kernel source volume (cs-kernel-cache) so the
+# module is compiled against exactly our custom kernel headers.
+#
+# Inputs  : /cache/linux  — kernel source (from kernel stage)
+#           /workspace    — project repo (for dkms.conf)
+# Outputs : /output/wifi/
+#             r8723bs.ko          — pre-compiled ARM64 module
+#             src/                — full driver source (for DKMS)
+#             dkms.conf           — DKMS config copy
+# ============================================================
+FROM cs-build-base
+
+# rtl8723bs needs these extra headers during build
+RUN apt-get update && apt-get install -y \
+    libelf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+VOLUME ["/cache"]
+
+COPY docker/scripts/build-wifi-module.sh /usr/local/bin/build-wifi-module.sh
+RUN chmod +x /usr/local/bin/build-wifi-module.sh
+
+ENTRYPOINT ["/usr/local/bin/build-wifi-module.sh"]

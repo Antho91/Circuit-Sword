@@ -1,0 +1,17 @@
+network:
+  version: 2
+  renderer: NetworkManager
+
+  # Circuit Sword — first-boot WiFi config.
+  # Copied to the boot partition during image assembly; editable from any PC.
+  # Replace YOUR_WIFI_NAME / YOUR_WIFI_PASSWORD with your WiFi name + password
+  # before flashing (or edit network-config on the boot partition afterwards).
+  # Left as-is, first-boot recognises the placeholder and skips WiFi setup.
+  wifis:
+    wlan0:
+      dhcp4: true
+      optional: true
+      access-points:
+        "YOUR_WIFI_NAME":
+          password: "YOUR_WIFI_PASSWORD"
+      regulatory-domain: NL

@@ -1,0 +1,40 @@
+# ============================================================
+# Base image shared by kernel and assembler stages
+# Ubuntu 22.04 LTS with ARM64 cross-compilation toolchain
+# ============================================================
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    # Cross-compilation
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    binutils-aarch64-linux-gnu \
+    # Kernel build deps
+    bc bison flex \
+    libssl-dev libelf-dev \
+    libncurses-dev \
+    make \
+    # Image mounting / partitioning
+    kpartx \
+    parted \
+    dosfstools \
+    e2fsprogs \
+    mount \
+    # General tooling
+    git \
+    curl \
+    wget \
+    ca-certificates \
+    python3 \
+    python3-pip \
+    rsync \
+    sudo \
+    xz-utils \
+    zip \
+    unzip \
+    coreutils \
+    util-linux \
+    kmod \
+    && rm -rf /var/lib/apt/lists/*

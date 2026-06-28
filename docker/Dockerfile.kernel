@@ -1,0 +1,24 @@
+# ============================================================
+# Kernel builder
+# Cross-compiles a 64-bit Raspberry Pi kernel with RTL8723BS
+# Does NOT need loop devices — only outputs artifact files.
+#
+# Inputs  : KERNEL_BRANCH env var (default: rpi-6.12.y)
+# Outputs : /output/kernel/
+#             kernel8.img
+#             *.dtb  (broadcom + overlays)
+#             modules.tar.gz
+# ============================================================
+FROM cs-build-base
+
+# Cache kernel source between builds via a named volume mounted at /cache
+VOLUME ["/cache"]
+
+COPY docker/scripts/build-kernel.sh /usr/local/bin/build-kernel.sh
+RUN chmod +x /usr/local/bin/build-kernel.sh
+
+# WiFi DKMS metadata (dkms.conf + Makefile) baked into the image
+# so build-kernel.sh can copy them to /output/wifi/ alongside the source.
+COPY wifi-driver/ /opt/wifi-driver/
+
+ENTRYPOINT ["/usr/local/bin/build-kernel.sh"]

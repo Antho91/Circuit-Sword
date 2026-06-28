@@ -1,0 +1,14 @@
+[Unit]
+Description=Circuit Sword WiFi setup from boot partition
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/cs-firstboot-wifi.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
