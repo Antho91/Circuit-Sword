@@ -115,4 +115,38 @@ dtparam=clock-frequency=32000000
 framebuffer_width=640
 framebuffer_height=480
 
+# ---------------------------------------------------------------------------
+# NOT TESTED (I DONT OWN AN OLD PANEL WITH ADAPTER)
+# ALTERNATIVE PANEL: 640x480 LCD that REQUIRES an adapter. To use it, comment out the
+# active block above (add a '#' to each of its 5 lines) and uncomment all of
+# the lines below. KMS translation of the legacy Buster values:
+#   display_rotate=3 -> rotate=270
+#   hdmi_timings=480 1 5 5 14 640 1 3 3 3 ... 32000000  -> the h/v params below
+##dtoverlay=vc4-kms-dpi-generic,rotate=270,hactive=480,hfp=5,hsync=5,hbp=14
+##dtparam=vactive=640,vfp=3,vsync=3,vbp=3
+##dtparam=clock-frequency=32000000
+##framebuffer_width=640
+##framebuffer_height=480
+# This panel's legacy config used dpi_output_format=287269 (BGR666). If the
+# colours look wrong, append ',bgr666-padhi' (or ',rgb666-padhi') to the
+# dtoverlay line. If the pixels look fuzzy/jittery, append ',pixclk-invert'.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# ALTERNATIVE PANEL: 320x240 Circuit Sword small screen (CONFIRMED WORKING).
+# To use it, comment out the active 640x480 block above (add a '#' to each of
+# its 5 lines) and uncomment all of the lines below. This panel needs
+# hsync/vsync/de inversion and 18-bit RGB666 (bus-format=0x1009) -- the 640
+# panel does not.
+# NOTE: params are split across dtparam lines on purpose; cramming them all
+# onto the dtoverlay line makes config.txt silently drop some (hactive falls
+# back to the default 480 -> garbled image).
+##dtoverlay=vc4-kms-dpi-generic,rotate=180
+##dtparam=hactive=320,hfp=20,hsync=30,hbp=38,hsync-invert
+##dtparam=vactive=240,vfp=4,vsync=3,vbp=10,vsync-invert
+##dtparam=clock-frequency=9600000,bus-format=0x1009,de-invert
+##framebuffer_width=320
+##framebuffer_height=240
+# ---------------------------------------------------------------------------
+
 # CS END DPI SETTINGS
