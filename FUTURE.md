@@ -2,39 +2,17 @@
 
 Ideas captured for later. Not blocking the current image.
 
-## HDMI hotplug (auto-switch DPI ↔ HDMI without reboot)
+## HDMI hotplug — DONE (reboot-based); seamless live-switch declined
 
-**Goal:** plug a (mini-)HDMI cable in → the system switches output to HDMI
-automatically; unplug → back to the internal DPI screen. Replaces the current
-`settings/reboot_to_hdmi.*` flow that requires a full reboot.
+Shipped: a real cable change triggers a reboot that brings the display up on the
+right connector (`cs-hdmi-hotplug.sh` + a DRM `change` udev rule, installed by the
+assembler; see the README "HDMI output / docking"). Plug in → reboot to 1080p
+HDMI (DPI panel goes dark); unplug → reboot to the 640×480 DPI panel.
 
-**What's easy:** detecting the hotplug.
-- The kernel emits a udev `change` event on the DRM device when HDMI is
-  connected/disconnected.
-- Or poll the connector status:
-  `cat /sys/class/drm/card*-HDMI-A-1/status` → `connected` / `disconnected`.
-
-**What's hard:** EmulationStation / RetroArch grab one KMS connector (the DPI
-panel) at startup and render there; they do **not** migrate to a newly-attached
-HDMI connector on their own, and the running app holds the DRM master.
-
-**Realistic approach — "hot-switch" (a few seconds, not seamless):**
-1. A watcher (natural home: the `cs-hud` daemon, which already does KMS/DRM, or a
-   udev rule + script) detects an HDMI connect/disconnect.
-2. On connect: save the running game state (RetroArch `SAVE_STATE` via the FIFO,
-   as the low-battery shutdown already does) → reconfigure the display →
-   restart EmulationStation on the HDMI connector at native resolution.
-3. On disconnect: switch back to the DPI panel.
-
-This reuses the existing `reboot_to_hdmi` logic but replaces the `reboot` with
-"reconfigure + restart ES on the chosen output."
-
-**Why not just clone DPI→HDMI?** The DPI panel is 640×480 rotated 180°; cloned
-onto a 1080p HDMI it would be a tiny, upside-down image. Better to render ES
-natively at the HDMI resolution (hence the restart).
-
-**Truly seamless** (game instantly appears on HDMI, no restart) is impractical
-because the running app owns the DRM master on a single connector.
+**Seamless live-switching will not be pursued.** The running app (ES/RetroArch)
+holds the DRM master on a single KMS connector and won't migrate to a
+newly-attached one, so a fresh boot — which always brings the display up
+correctly — is used instead. Kept here only so the idea isn't re-opened.
 
 ---
 
@@ -105,22 +83,36 @@ and needs its own compat shims, so it offers little over the staging driver.
 Mainline rtw88 supports 8723**CS/DS** but **not** 8723**BS** (SDIO), so an
 out-of-tree driver stays necessary either way.
 
-## snd-usb-audio volume fix: port to newer kernels + re-enable DKMS
+## snd-usb-audio volume range: verify the patch is even needed (likely not)
 
 **Today:** audio works on any kernel via the stock in-kernel `snd-usb-audio`
-module (drives the C-Media CM103+ USB chip). The *patched* volume-fix module is
-**no longer baked** into the image — its pre-built `.ko` had a vermagic/symbol
-mismatch (`disagrees about version of symbol module_layout`), so the kernel
-refused to load it AND, sitting in `updates/dkms/`, it blocked the working stock
-module → **no audio at all**. It also doesn't build on 6.18 (`from_timer`), and
-with DKMS `AUTOINSTALL` on its failed rebuild poisoned the first-boot flow.
+module (drives the C-Media CM103+ USB chip). The old patched *volume-fix* module
+is deliberately **not baked in** — its pre-built `.ko` had a vermagic/symbol
+mismatch that blocked the stock module → no audio, it doesn't build on 6.18
+(`from_timer`), and with DKMS `AUTOINSTALL` its failed rebuild poisoned first boot.
 
-**To finish:** port the patched module so it compiles on current kernels (the
-`Makefile.dkms` build + the source under `sound-module/snd-usb-audio-0.1/`), then
-flip `AUTOINSTALL` back to `yes` in both `sound-module/dkms.conf` and
-`sound-module/snd-usb-audio-0.1/dkms.conf`. Until then: audio works, only the
-volume-range fix is missing, and WiFi DKMS is unaffected. WiFi must never depend
-on this module.
+**Open question — is the volume patch still needed at all?** The patch only
+remapped the chip's volume *range/curve* (the old 32-bit build had an unusably
+small usable range). It was never confirmed that the modern stock driver has the
+same problem on this hardware, and mainline `snd-usb-audio` has gained C-Media
+volume quirks over the years — so the stock driver may already be fine. **Verify
+on the device before porting anything:**
+```bash
+amixer -c 1 scontrols          # which control does the USB card expose?
+amixer -c 1 sget <control>     # inspect the dB range — is it usable?
+speaker-test -c2 -twav -l1     # audible difference across the range?
+```
+- Range usable → the patch is **unnecessary**: delete this item and the
+  `sound-module/` source.
+- Range cramped into the top few % → port the patch (source under
+  `sound-module/snd-usb-audio-0.1/`, `Makefile.dkms`) and flip `AUTOINSTALL`
+  back to `yes` in both `sound-module/dkms.conf` files. WiFi DKMS must never
+  depend on this module.
+
+**Don't confuse this with the cs-hud volume bug below.** Even with a perfect
+kernel module, cs-hud currently aims `amixer` at the wrong card/control. That
+~2-line software fix is the *real* first action and is independent of the kernel
+module — fix and confirm that before deciding the kernel patch is needed.
 
 ## VERIFY: DKMS build at -j2 survives an apt kernel upgrade
 
@@ -132,6 +124,36 @@ fresh image: after first boot, run `sudo apt full-upgrade` and confirm the
 `rtl8723bs` DKMS rebuild finishes without `cc1 Killed`. If it OOMs, drop
 `parallel_jobs` back to `1` in `cs-firstboot.sh` (proven safe). Do NOT go to -j3+
 — three compiles exceed physical RAM and thrash on zram.
+
+## On-device update script (refresh components without a reflash)
+
+**Goal:** when we fix something in the repo (a cs-hud build, a systemd unit, a
+config, the WiFi/BT driver), let a user update their *working* device in place
+instead of re-flashing and redoing first-boot setup.
+
+**Why:** a full reflash wipes ROMs, saves, configs and the user's WiFi
+credentials, and repeats the slow first-boot DKMS install. For small fixes that
+is overkill — an in-place updater keeps the device as-is and only swaps the
+changed pieces.
+
+**Scope to define — what an update may safely touch on a running system:**
+- rebuild/replace `cs-hud` (binary + `cs-hud.service`),
+- refresh systemd units + scripts under `/usr/local/bin` and `/etc/systemd`,
+- update `settings/boot/config.txt` — **carefully**: a user may have switched the
+  DPI block (e.g. to the 320 panel), so don't clobber local edits; diff/merge the
+  `# CS ...`-managed regions only,
+- rebuild the WiFi / `cs_battery` DKMS modules against the running kernel.
+
+**Approach:** the device git-pulls this repo (or downloads a release tarball),
+then runs an **idempotent** installer that re-applies only the changed pieces and
+restarts the affected services. Needs per-component versioning (a
+`CS CONFIG VERSION`-style marker) so it knows what to touch, and must be safe to
+re-run. Roll back cleanly if a service fails to come up.
+
+**Note:** the repo still ships Kite's old `update.sh` (root) — it stops the *old*
+`cs-osd.service` and re-runs the obsolete manual install flow, so it is broken
+against the current image. **Replace** it rather than extend it (it's also listed
+as a dead-code cleanup candidate below).
 
 ## Cosmetic / minor (deferred)
 
@@ -162,7 +184,9 @@ fresh image: after first boot, run `sudo apt full-upgrade` and confirm the
   menu button (serial `CMD_GET_STATUS` bit 0). Flip in code if a board behaves
   inverted.
 
-- **cs-hud volume control doesn't change the USB audio.** Brightness works;
+- **cs-hud volume control doesn't change the USB audio.** ← *do this first; it's
+  independent of (and a prerequisite for judging) the snd-usb-audio kernel patch
+  above.* Brightness works;
   volume doesn't. `hardware_get_volume`/`hardware_set_volume` (`cs-hud_new/src/hardware.c`)
   call `amixer sget/sset PCM` on the *default* card. The C-Media USB card (now
   ALSA card 1, after the audio-routing fix) may not have a control named `PCM`
