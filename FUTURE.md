@@ -172,14 +172,26 @@ longer used. Do this carefully (the build works); verify each before removing.
   `docker/scripts/build-sound-module.sh`). Audio runs on the stock in-kernel
   `snd-usb-audio` driver; the patched volume-fix is confirmed unnecessary on this
   hardware (usable PCM range on card 1).
+- The **legacy manual/compose build flow** is **removed**: `build/`
+  (`1_build_retropie.sh`, `2_upgrade_patch_kernel_64bit.sh`,
+  `3_install_additional_software.sh`, `README.md`) and `docker-compose.yml`, all
+  fully superseded by `build.sh` + `docker/scripts/*`. `build.sh` never ran
+  compose, so the now-pointless `docker-compose` prerequisite check + `COMPOSE`
+  variable were dropped too, and the stale `3_install_additional_software.sh` /
+  `$WORKSPACE/build` (`BASE_DIR`/`START_FOLDER`) references in the assembler +
+  `Dockerfile.assembler` were cleaned up.
+- Orphaned `settings/` files **removed**: `WIFI.txt` (old manual rtl8723bs build
+  note, superseded by the WiFi DKMS pipeline) and `bluetooth-audio.sh` (old
+  PulseAudio A2DP helper, never wired into the image). `settings/miniwi-8.psf.gz`
+  was **kept** — it is used by `settings/boot/config-cs.txt` (`setfont`).
 
 **Candidates to audit (verify references, then remove if dead):**
-- **`build/` legacy scripts** (`1_build_retropie.sh`, `2_upgrade_patch_kernel_64bit.sh`,
-  `3_install_additional_software.sh`) — the old *manual* build flow, fully
-  superseded by the Docker pipeline (`docker/scripts/*` + `build.sh`). The
-  `build/2` comment about the kernel is already stale/misleading. Likely deletable.
-- **Orphaned `settings/` files** — grep each `settings/*` against
-  `entrypoint-assembler.sh`; anything not copied/referenced is a candidate.
+- **Remaining `settings/` files** — the obvious orphans are gone; a fresh grep of
+  each `settings/*` against `entrypoint-assembler.sh` + `cs-update.sh` will catch
+  any that fall out of use later.
+- **Root-level tools** — `install.sh`, `cs-configure.py`, and the `dpi-cloner/`,
+  `cs-tester/`, `kite-arduino/` dirs were not audited this round; verify each is
+  still referenced/useful before removing.
 - **Stale comments** — several were updated this session; a sweep for others that
   no longer match the code (e.g. references to removed services) is worth it.
 

@@ -8,7 +8,7 @@
 #  2. Mounts it (loop device)
 #  3. Injects the custom kernel + modules from /output/kernel/
 #  4. Injects the cs-hud binary from /output/hud/
-#  5. Runs the software configuration (3_install_additional_software.sh logic)
+#  5. Runs the software configuration (inline)
 #  6. Unmounts cleanly
 #  7. Outputs rpios-cs-final.img to /output/
 #
@@ -126,10 +126,8 @@ fi
 # Run the software install script with the mounted paths
 echo "[assembler] Running software configuration..."
 
-# Use DEST / DESTBOOT variables that 3_install_additional_software.sh understands
+# Paths consumed by the inline software-config section below
 export IMG="$IMG_DST"
-export BASE_DIR="$WORKSPACE/build"
-export START_FOLDER="$WORKSPACE/build"
 export IMG_DIR="$(dirname "$IMG_DST")"
 export MNT_BOOT="$MNT_BOOT"
 export MNT_ROOT="$MNT_ROOT"
@@ -250,10 +248,8 @@ rsync -a --delete \
     --exclude='*.img.xz' \
     --exclude='rp_build_image/' \
     --exclude='docker/' \
-    --exclude='build/' \
     --exclude='wifi-driver/' \
     --exclude='.claude/' \
-    --exclude='docker-compose.yml' \
     --exclude='build.sh' \
     --exclude='build.log' \
     "$WORKSPACE/" "$BINDIR/"
