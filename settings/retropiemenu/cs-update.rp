@@ -1,4 +1,0 @@
-#!/bin/bash
-# EmulationStation "RetroPie" menu entry — Circuit Sword Updater.
-# Runs the updater interactively (check → show changes → ask → apply) as root.
-sudo /usr/local/bin/cs-update menu
