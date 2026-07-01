@@ -30,7 +30,6 @@ set -euo pipefail
 
 TARGET=${1:-help}
 
-COMPOSE="docker compose"
 OUTPUT_DIR="$(cd "$(dirname "$0")" && pwd)/output"
 BT_BINARY="$OUTPUT_DIR/bt/rtk_hciattach"
 
@@ -51,15 +50,6 @@ check_deps() {
 
     docker info >/dev/null 2>&1 \
         || error "Docker daemon is not running."
-
-    # Check for docker compose (v2 plugin or v1 standalone)
-    if ! docker compose version >/dev/null 2>&1; then
-        if command -v docker-compose >/dev/null 2>&1; then
-            COMPOSE="docker-compose"
-        else
-            error "docker compose (v2) or docker-compose (v1) is required."
-        fi
-    fi
 
     # Check buildx is available (needed for ARM64 HUD build)
     docker buildx version >/dev/null 2>&1 \
