@@ -46,7 +46,6 @@ do_check() {
 clone_repo() {
     command -v git >/dev/null 2>&1 || die "git not installed"
     SRC=$(mktemp -d /tmp/cs-update.XXXXXX)
-    BACKUP=$(mktemp -d /var/lib/cs-update-backup.XXXXXX)
     trap 'rm -rf "$SRC"' EXIT
     log "Cloning $REPO_URL ($BRANCH) ..."
     git clone --depth 50 --branch "$BRANCH" "$REPO_URL" "$SRC" >/dev/null 2>&1 || die "clone failed (network?)"
@@ -99,6 +98,9 @@ update_config_txt() {
 # ── install: re-apply components from the clone, restart, write version ─────
 do_install() {
     [ -n "$SRC" ] || die "no clone"
+    # Runs as root (via do_apply → ensure_root). Create the rollback backup dir
+    # here (needs root), not in clone_repo which may run as the menu user.
+    BACKUP=$(mktemp -d /var/lib/cs-update-backup.XXXXXX)
 
     install_file "$SRC/settings/cs-hdmi-hotplug.sh"     /usr/local/bin/cs-hdmi-hotplug.sh        755
     install_file "$SRC/settings/99-cs-hdmi.rules"       /etc/udev/rules.d/99-cs-hdmi.rules       644
@@ -124,13 +126,17 @@ do_install() {
 
     update_config_txt
 
-    # ES "RetroPie" menu entries — mirror settings/retropiemenu/*.rp so new
-    # features dropped there deploy automatically (no updater change needed).
+    # ES "RetroPie" menu entries — mirror settings/retropiemenu/*.{rp,sh} so new
+    # features dropped there deploy automatically. Custom launchers must be .sh:
+    # the RetroPie launcher maps *.rp to scriptmodules and ignores their content,
+    # but runs *.sh directly (as the user, with joy2key).
     if [ -d "$SRC/settings/retropiemenu" ]; then
         mkdir -p /home/pi/RetroPie/retropiemenu
-        for rp in "$SRC"/settings/retropiemenu/*.rp; do
-            [ -f "$rp" ] || continue
-            install_file "$rp" "/home/pi/RetroPie/retropiemenu/$(basename "$rp")" 755
+        # Drop the obsolete .rp form of our entry (renamed to .sh).
+        rm -f /home/pi/RetroPie/retropiemenu/cs-update.rp
+        for entry in "$SRC"/settings/retropiemenu/*.rp "$SRC"/settings/retropiemenu/*.sh; do
+            [ -f "$entry" ] || continue
+            install_file "$entry" "/home/pi/RetroPie/retropiemenu/$(basename "$entry")" 755
         done
         chown -R pi:pi /home/pi/RetroPie/retropiemenu 2>/dev/null || true
     fi
@@ -196,7 +202,11 @@ msgbox() {
 }
 
 do_menu() {
-    ensure_root menu "$BRANCH"
+    # Runs as the invoking user: the RetroPie retropiemenu launcher calls this
+    # entry (cs-update.sh) via `sudo -u <user> bash`. Keep the whiptail UI OUT of
+    # a root/sudo env so TERM + the tty survive (otherwise whiptail can't render
+    # and the menu just flashes back to ES). Elevate only for the install itself.
+    export TERM="${TERM:-linux}"
     local msg rc; msg=$(do_check); rc=$?
     if [ "$rc" -ne 10 ]; then msgbox "$msg"; return 0; fi   # up-to-date or error
 
@@ -210,7 +220,12 @@ do_menu() {
         echo "$msg"; echo "$cl"; read -r -p "Apply now? [y/N] " a; [ "$a" = y ] || { echo Cancelled; return 0; }
     fi
 
-    do_install
+    # Elevate only for the install (writes system paths, apt, systemctl).
+    if [ "$(id -u)" -eq 0 ]; then
+        do_install
+    else
+        sudo "$0" apply "$BRANCH"
+    fi
     echo; echo "Done. Press a button to return."; read -r -n1 -t 30 || true
 }
 

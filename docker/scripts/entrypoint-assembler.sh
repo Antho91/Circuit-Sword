@@ -630,15 +630,18 @@ else
     echo unknown > "$MNT_ROOT/var/lib/cs-version"
 fi
 
-# ES "RetroPie" menu entries — copy settings/retropiemenu/*.rp into the
-# retropiemenu romdir (single source of truth; cs-update mirrors the same dir, so
-# any new .rp dropped in settings/retropiemenu/ later deploys via cs-update too).
+# ES "RetroPie" menu entries — copy settings/retropiemenu/*.{rp,sh} into the
+# retropiemenu romdir (single source of truth; cs-update mirrors the same dir).
+# Custom launchers MUST be .sh: the RetroPie launcher maps *.rp to scriptmodules
+# and ignores their content, but runs *.sh directly (as the user, with joy2key).
 RETROPIEMENU="$MNT_ROOT/home/pi/RetroPie/retropiemenu"
 mkdir -p "$RETROPIEMENU"
-if ls "$BINDIR/settings/retropiemenu/"*.rp >/dev/null 2>&1; then
-    cp "$BINDIR/settings/retropiemenu/"*.rp "$RETROPIEMENU/"
-    chmod +x "$RETROPIEMENU/"*.rp
-fi
+shopt -s nullglob
+for entry in "$BINDIR/settings/retropiemenu/"*.rp "$BINDIR/settings/retropiemenu/"*.sh; do
+    cp "$entry" "$RETROPIEMENU/"
+    chmod +x "$RETROPIEMENU/$(basename "$entry")"
+done
+shopt -u nullglob
 chown -R ${pi_uid}:${pi_gid} "$RETROPIEMENU" 2>/dev/null || true
 echo "[assembler] Installed cs-update + ES 'RetroPie' menu entries"
 
