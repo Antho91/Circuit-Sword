@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- Metadata for Circuit Sword's EmulationStation "RetroPie" menu entries.
+     cs-menu-sync merges each <game> (matched by <path>) into the device's live
+     retropie gamelist and installs the referenced icon, at build time and on
+     every cs-update. Add a <game> block here for each new settings/retropiemenu
+     entry to give it a name/description/icon. -->
+<gameList>
+  <game>
+    <path>./cs-update.sh</path>
+    <name>Circuit Sword Updater</name>
+    <desc>Check GitHub for Circuit Sword updates and install them in place, without reflashing — you decide whether to download.</desc>
+    <image>./icons/cs-update.png</image>
+  </game>
+</gameList>

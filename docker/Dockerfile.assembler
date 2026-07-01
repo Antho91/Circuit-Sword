@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     samba \
     kmod \
     git \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/scripts/entrypoint-assembler.sh /usr/local/bin/entrypoint-assembler.sh

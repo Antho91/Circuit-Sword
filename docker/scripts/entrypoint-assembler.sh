@@ -643,6 +643,23 @@ for entry in "$BINDIR/settings/retropiemenu/"*.rp "$BINDIR/settings/retropiemenu
 done
 shopt -u nullglob
 chown -R ${pi_uid}:${pi_gid} "$RETROPIEMENU" 2>/dev/null || true
+
+# Friendly name/description/icon for the entries: install cs-menu-sync and run it
+# against the mounted image so the shipped gamelist already carries them (it also
+# runs on-device via cs-update). Matches entries by <path>, so the built-in
+# RetroPie entries are left untouched.
+cp "$BINDIR/settings/cs-menu-sync.sh" "$MNT_ROOT/usr/local/bin/cs-menu-sync"
+chmod 755 "$MNT_ROOT/usr/local/bin/cs-menu-sync"
+CS_ROMDIR="$RETROPIEMENU" \
+CS_GAMELIST="$MNT_ROOT/home/pi/.emulationstation/gamelists/retropie/gamelist.xml" \
+CS_FRAGMENT="$BINDIR/settings/retropiemenu/gamelist.xml" \
+CS_ICON_SRC="$BINDIR/settings/retropiemenu/icons" \
+CS_OWNER="" \
+    bash "$MNT_ROOT/usr/local/bin/cs-menu-sync" \
+    && echo "[assembler] Applied gamelist names/icons for cs-update" \
+    || echo "[assembler] WARN: cs-menu-sync failed — entries will show by filename"
+chown -R ${pi_uid}:${pi_gid} "$MNT_ROOT/home/pi/.emulationstation" 2>/dev/null || true
+chown -R ${pi_uid}:${pi_gid} "$RETROPIEMENU" 2>/dev/null || true
 echo "[assembler] Installed cs-update + ES 'RetroPie' menu entries"
 
 # Re-enable first-boot root partition expansion.
