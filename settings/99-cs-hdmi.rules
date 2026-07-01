@@ -1,0 +1,1 @@
+ACTION=="change", KERNEL=="card0", SUBSYSTEM=="drm", RUN+="/usr/local/bin/cs-hdmi-hotplug.sh"

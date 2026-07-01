@@ -87,35 +87,28 @@ Confirmed on the real CM3 (1 GB RAM): the first-boot kernel handoff builds both
 `cc1 Killed`/OOM, and `dmesg` shows no oom-kill. Do NOT go to -j3+ — three
 compiles exceed physical RAM and thrash on zram.
 
-## On-device update script (refresh components without a reflash)
+## On-device update script — IMPLEMENTED (`cs-update`)
 
-**Goal:** when we fix something in the repo (a cs-hud build, a systemd unit, a
-config, the WiFi/BT driver), let a user update their *working* device in place
-instead of re-flashing and redoing first-boot setup.
+Manual, user-triggered in-place updater (`settings/cs-update.sh` →
+`/usr/local/bin/cs-update`). Clones the repo from GitHub and re-applies the
+userspace components without a reflash: **cs-hud** (rebuilt from source),
+the cs-* scripts + udev rule, the systemd units, the settings configs,
+**Bluetooth** (`rtk_hciattach` + firmware + service, all prebuilt in the repo),
+and **config.txt** — refreshed from the repo but with the device's **DPI block
+preserved** (screen-specific). Never touches the kernel, the WiFi DKMS driver,
+or `network-config`. Idempotent, backs up + rolls back cs-hud if it fails to
+start, and tracks the installed revision in `/var/lib/cs-version` (written at
+build time) so `cs-update check` can tell when a newer commit exists.
 
-**Why:** a full reflash wipes ROMs, saves, configs and the user's WiFi
-credentials, and repeats the slow first-boot DKMS install. For small fixes that
-is overkill — an in-place updater keeps the device as-is and only swaps the
-changed pieces.
+Triggers: SSH (`cs-update` / `cs-update check` / `cs-update apply`) or the
+EmulationStation **"RetroPie" menu** entry "cs-update" (a `.rp` wrapper) — which
+checks first and asks before downloading. Nothing runs automatically. The old
+broken Kite `update.sh` was removed.
 
-**Scope to define — what an update may safely touch on a running system:**
-- rebuild/replace `cs-hud` (binary + `cs-hud.service`),
-- refresh systemd units + scripts under `/usr/local/bin` and `/etc/systemd`,
-- update `settings/boot/config.txt` — **carefully**: a user may have switched the
-  DPI block (e.g. to the 320 panel), so don't clobber local edits; diff/merge the
-  `# CS ...`-managed regions only,
-- rebuild the WiFi / `cs_battery` DKMS modules against the running kernel.
-
-**Approach:** the device git-pulls this repo (or downloads a release tarball),
-then runs an **idempotent** installer that re-applies only the changed pieces and
-restarts the affected services. Needs per-component versioning (a
-`CS CONFIG VERSION`-style marker) so it knows what to touch, and must be safe to
-re-run. Roll back cleanly if a service fails to come up.
-
-**Note:** the repo still ships Kite's old `update.sh` (root) — it stops the *old*
-`cs-osd.service` and re-runs the obsolete manual install flow, so it is broken
-against the current image. **Replace** it rather than extend it (it's also listed
-as a dead-code cleanup candidate below).
+**Possible follow-ups:** prettier ES menu name via a retropiemenu `gamelist.xml`
+entry; optional DKMS-module refresh; a `--dry-run` that just lists what would
+change. The DPI `config.txt` block is deliberately left untouched (device/screen
+specific).
 
 ## Cosmetic / minor (deferred)
 
@@ -131,14 +124,6 @@ as a dead-code cleanup candidate below).
   assumption in `hardware_set_fan`), power switch (GPIO 37 ON=HIGH assumption),
   menu button (serial `CMD_GET_STATUS` bit 0). Flip in code if a board behaves
   inverted.
-
-- **cs-hud volume control doesn't change the USB audio.** Brightness works;
-  volume doesn't. `hardware_get_volume`/`hardware_set_volume`
-  (`cs-hud_new/src/hardware.c`) call `amixer sget/sset PCM` on the *default* card
-  — which is the HDMI card (card 0). The C-Media USB chip is **ALSA card 1** and
-  *does* expose a working `PCM` control (confirmed on hardware). Fix: point amixer
-  at card 1, e.g. `amixer -c 1 sset PCM N%` / `amixer -c 1 sget PCM`. ~2-line
-  change.
 
 - **Laggy transitions in the RetroPie config menu (ES → audio/wifi/bluetooth).**
   Opening one config item, going back, then opening another (e.g. audio → back →
@@ -193,10 +178,6 @@ longer used. Do this carefully (the build works); verify each before removing.
   `3_install_additional_software.sh`) — the old *manual* build flow, fully
   superseded by the Docker pipeline (`docker/scripts/*` + `build.sh`). The
   `build/2` comment about the kernel is already stale/misleading. Likely deletable.
-- **`update.sh`** (repo root) — Kite's old on-device updater: it stops
-  `cs-osd.service` (the *old* HUD service name) and git-pulls + re-runs the manual
-  install flow. Not used by the Docker-image pipeline and almost certainly broken
-  against the current image. Verify, then likely remove.
 - **Orphaned `settings/` files** — grep each `settings/*` against
   `entrypoint-assembler.sh`; anything not copied/referenced is a candidate.
 - **Stale comments** — several were updated this session; a sweep for others that

@@ -1,0 +1,14 @@
+[Unit]
+Description=Set Circuit Sword boot splash orientation to match the active display
+DefaultDependencies=no
+After=console-setup.service
+Before=asplashscreen.service
+ConditionPathExists=/usr/local/bin/cs-splash-orient.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cs-splash-orient.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

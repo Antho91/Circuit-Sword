@@ -45,6 +45,39 @@ The image ships with the standard Raspberry Pi OS credentials:
 
 ---
 
+## Updating in place (no reflash)
+
+The userspace software (HUD, scripts, systemd units, settings, Bluetooth, and the
+non-DPI parts of `config.txt`) can be updated **without re-flashing the card**:
+
+- In EmulationStation, open the **RetroPie** menu → **Circuit Sword Updater**. It
+  checks GitHub, shows you the changes, and only downloads/applies them if you
+  confirm. It is fully **manual** — nothing updates automatically.
+- Or over SSH: `sudo cs-update check` (report only) / `sudo cs-update menu`
+  (interactive) / `sudo cs-update apply` (non-interactive).
+
+The updater never touches the **kernel**, the **WiFi DKMS driver**, or
+`network-config`, and it **preserves your screen's DPI block** in `config.txt`, so
+your WiFi credentials and screen choice survive. `cs-hud` is rebuilt from source
+and rolled back automatically if it fails to start. For a new kernel or a driver
+change you still re-flash a fresh image.
+
+> Point the updater at a different repo/branch with `CS_REPO_URL` / `CS_REPO_BRANCH`
+> (or pass a branch as the last argument, e.g. `sudo cs-update menu my-branch`).
+
+---
+
+## Screen selection
+
+The image ships configured for the stock **640×480** DPI panel. `config.txt`
+contains a **`# CS START DPI SETTINGS` … `# CS END DPI SETTINGS`** block with the
+active 640 setup plus **commented-out alternatives** — a 640 HDMI-adapter panel
+and a **320×240** panel (which needs the explicit `bus-format=0x1009` + sync/DE
+inversions). Swap the active lines for the block that matches your hardware; the
+in-place updater deliberately leaves this block untouched.
+
+---
+
 ## Building the image yourself
 
 ### Requirements
@@ -139,6 +172,8 @@ The final image lands at `output/rpios-cs-final.img`.
   (the fitted 2-wire blower must not be PWM-throttled on its supply)
 - EmulationStation pixel theme + instant transitions; rotated boot splash
 - First-boot partition resize + package install + one-time self-cleanup
+- **In-place updater** (`cs-update`) — manual, user-triggered from the ES RetroPie
+  menu; updates userspace without a reflash (see *Updating in place* above)
 
 ## Known issues / not yet done
 

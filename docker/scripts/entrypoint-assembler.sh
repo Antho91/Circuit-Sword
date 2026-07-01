@@ -453,32 +453,14 @@ echo "[assembler] Boot splash set to kr_logo.png (via /etc/splashscreen.list)"
 # splash is correct even after a power-cycle with a changed cable state (when no
 # hotplug ran to set it). Unknown/absent HDMI defaults to the DPI image, so the
 # handheld panel is always right-side-up.
-cat > "$MNT_ROOT/usr/local/bin/cs-splash-orient.sh" << 'SPLASHORIENT'
-#!/bin/bash
-if [ "$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null)" = "connected" ]; then
-    echo /home/pi/Circuit-Sword/settings/kr_logo_hdmi.png > /etc/splashscreen.list
-else
-    echo /home/pi/Circuit-Sword/settings/kr_logo.png > /etc/splashscreen.list
-fi
-SPLASHORIENT
+# Source of truth: settings/cs-splash-orient.{sh,service} (so cs-update can
+# refresh them in place without a reflash).
+cp "$BINDIR/settings/cs-splash-orient.sh" \
+   "$MNT_ROOT/usr/local/bin/cs-splash-orient.sh"
 chmod +x "$MNT_ROOT/usr/local/bin/cs-splash-orient.sh"
 
-cat > "$MNT_ROOT/etc/systemd/system/cs-splash-orient.service" << 'SPLASHORIENTSVC'
-[Unit]
-Description=Set Circuit Sword boot splash orientation to match the active display
-DefaultDependencies=no
-After=console-setup.service
-Before=asplashscreen.service
-ConditionPathExists=/usr/local/bin/cs-splash-orient.sh
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/cs-splash-orient.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=sysinit.target
-SPLASHORIENTSVC
+cp "$BINDIR/settings/cs-splash-orient.service" \
+   "$MNT_ROOT/etc/systemd/system/cs-splash-orient.service"
 mkdir -p "$MNT_ROOT/etc/systemd/system/sysinit.target.wants"
 ln -sf /etc/systemd/system/cs-splash-orient.service \
    "$MNT_ROOT/etc/systemd/system/sysinit.target.wants/cs-splash-orient.service"
@@ -625,48 +607,44 @@ fi
 # that only a power-cycle clears). We compare the live cable state against the
 # value autostart.sh recorded at boot, so spurious DRM events and the already-
 # matched state never trigger a reboot loop. The udev rule fires on any DRM HPD.
-cat > "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh" << 'HDMIHOTPLUG'
-#!/bin/bash
-# Skip during first-boot setup (sentinel absent = setup still running)
-[ -f /var/lib/cs-firstboot.done ] || exit 0
-
-# Debounce: ignore events within 8 seconds of the last run (HPD fires a burst)
-LOCK=/run/cs-hdmi-switch.lock
-NOW=$(date +%s)
-if [ -f "$LOCK" ]; then
-    LAST=$(cat "$LOCK" 2>/dev/null || echo 0)
-    [ $((NOW - LAST)) -lt 8 ] && exit 0
-fi
-echo "$NOW" > "$LOCK"
-
-# Act only on a real change away from what we booted with.
-CUR=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
-BOOT=$(cat /run/cs-hdmi-boot-state 2>/dev/null || echo unknown)
-[ "$BOOT" = "unknown" ] && exit 0
-[ "$CUR"  = "unknown" ] && exit 0
-[ "$CUR"  = "$BOOT" ]   && exit 0
-
-# Brief settle, then re-confirm the change is real and stable before rebooting.
-sleep 1
-CUR2=$(cat /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null || echo unknown)
-[ "$CUR2" != "$CUR" ]   && exit 0
-[ "$CUR2" = "$BOOT" ]   && exit 0
-
-# Splash orientation is set at boot by cs-splash-orient.service, so we don't
-# touch /etc/splashscreen.list here.
-logger -t cs-hdmi "HDMI changed ($BOOT -> $CUR2) — rebooting to switch display"
-# Save a running game before the reboot.
-[ -p /tmp/retroarch.fifo ] && { echo "SAVE_STATE" > /tmp/retroarch.fifo; sleep 0.5; }
-sync
-systemctl reboot
-HDMIHOTPLUG
+# Source of truth: settings/cs-hdmi-hotplug.sh + settings/99-cs-hdmi.rules (so
+# cs-update can refresh them in place without a reflash).
+cp "$BINDIR/settings/cs-hdmi-hotplug.sh" \
+   "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh"
 chmod +x "$MNT_ROOT/usr/local/bin/cs-hdmi-hotplug.sh"
 
 mkdir -p "$MNT_ROOT/etc/udev/rules.d"
-cat > "$MNT_ROOT/etc/udev/rules.d/99-cs-hdmi.rules" << 'UDEVRULE'
-ACTION=="change", KERNEL=="card0", SUBSYSTEM=="drm", RUN+="/usr/local/bin/cs-hdmi-hotplug.sh"
-UDEVRULE
+cp "$BINDIR/settings/99-cs-hdmi.rules" \
+   "$MNT_ROOT/etc/udev/rules.d/99-cs-hdmi.rules"
 echo "[assembler] HDMI hotplug handler installed"
+
+# --- cs-update: manual in-place updater -------------------------------------
+# Lets a user refresh the userspace components (cs-hud + scripts + units +
+# settings) from GitHub WITHOUT a reflash. Triggered manually from SSH
+# (`cs-update`) or the EmulationStation "RetroPie" menu — never automatically.
+cp "$BINDIR/settings/cs-update.sh" "$MNT_ROOT/usr/local/bin/cs-update"
+chmod 755 "$MNT_ROOT/usr/local/bin/cs-update"
+
+# Record the build revision so `cs-update check` can tell when a newer one exists.
+mkdir -p "$MNT_ROOT/var/lib"
+git config --global --add safe.directory "$WORKSPACE" 2>/dev/null || true
+if git -C "$WORKSPACE" rev-parse HEAD > "$MNT_ROOT/var/lib/cs-version" 2>/dev/null; then
+    echo "[assembler] cs-version = $(cat "$MNT_ROOT/var/lib/cs-version")"
+else
+    echo unknown > "$MNT_ROOT/var/lib/cs-version"
+fi
+
+# ES "RetroPie" menu entries — copy settings/retropiemenu/*.rp into the
+# retropiemenu romdir (single source of truth; cs-update mirrors the same dir, so
+# any new .rp dropped in settings/retropiemenu/ later deploys via cs-update too).
+RETROPIEMENU="$MNT_ROOT/home/pi/RetroPie/retropiemenu"
+mkdir -p "$RETROPIEMENU"
+if ls "$BINDIR/settings/retropiemenu/"*.rp >/dev/null 2>&1; then
+    cp "$BINDIR/settings/retropiemenu/"*.rp "$RETROPIEMENU/"
+    chmod +x "$RETROPIEMENU/"*.rp
+fi
+chown -R ${pi_uid}:${pi_gid} "$RETROPIEMENU" 2>/dev/null || true
+echo "[assembler] Installed cs-update + ES 'RetroPie' menu entries"
 
 # Re-enable first-boot root partition expansion.
 #
