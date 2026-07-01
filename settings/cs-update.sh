@@ -220,3 +220,4 @@ case "${1:-menu}" in
     menu|"") do_menu ;;
     *) echo "usage: cs-update [check|apply|menu] [branch]"; exit 2 ;;
 esac
+# --- updater-test marker: 2026-07-01 — safe to delete this branch ---
