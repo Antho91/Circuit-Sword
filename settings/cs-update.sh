@@ -139,6 +139,11 @@ do_install() {
             install_file "$entry" "/home/pi/RetroPie/retropiemenu/$(basename "$entry")" 755
         done
         chown -R pi:pi /home/pi/RetroPie/retropiemenu 2>/dev/null || true
+        # Friendly name/description/icon for the entries (gamelist + icons).
+        install_file "$SRC/settings/cs-menu-sync.sh" /usr/local/bin/cs-menu-sync 755
+        CS_FRAGMENT="$SRC/settings/retropiemenu/gamelist.xml" \
+        CS_ICON_SRC="$SRC/settings/retropiemenu/icons" \
+            /usr/local/bin/cs-menu-sync 2>/dev/null || true
     fi
 
     # cs-hud: rebuild from source if it changed
