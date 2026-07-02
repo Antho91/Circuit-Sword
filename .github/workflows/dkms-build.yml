@@ -133,7 +133,12 @@ jobs:
           python3 wifi-driver/patches/fix-cfg80211-6.18.py wifi-build/os_dep/ioctl_cfg80211.c
           # Build via the wrapper Makefile == the on-device DKMS MAKE line
           # (make KSRC=<build>), cross-compiled for arm64.
-          make -C wifi-build KSRC="$KTREE" \
+          # KBUILD_MODPOST_WARN=1: modules_prepare (no full kernel build) produces no
+          # Module.symvers, so modpost can't resolve kernel symbols. We only verify
+          # the module COMPILES against the kernel API (the CC steps) — not that it
+          # links/loads — so downgrade the unresolved-symbol errors to warnings. A
+          # real API break still fails at compile time.
+          make -C wifi-build KSRC="$KTREE" KBUILD_MODPOST_WARN=1 \
             ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- 2>&1 | tee dkms-wifi.log
           test -f wifi-build/r8723bs.ko
 
@@ -142,7 +147,9 @@ jobs:
           set -euo pipefail
           KTREE="$PWD/kernel"
           # Mirrors the battery dkms MAKE line: make KSRC=<build> (via its Makefile).
-          make -C battery-driver KSRC="$KTREE" \
+          # KBUILD_MODPOST_WARN=1: no Module.symvers from modules_prepare — we only
+          # check the module compiles, not that it links (see the WiFi step).
+          make -C battery-driver KSRC="$KTREE" KBUILD_MODPOST_WARN=1 \
             ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- 2>&1 | tee dkms-battery.log
           test -f battery-driver/cs_battery.ko
 
