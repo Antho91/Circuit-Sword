@@ -184,14 +184,17 @@ longer used. Do this carefully (the build works); verify each before removing.
   note, superseded by the WiFi DKMS pipeline) and `bluetooth-audio.sh` (old
   PulseAudio A2DP helper, never wired into the image). `settings/miniwi-8.psf.gz`
   was **kept** — it is used by `settings/boot/config-cs.txt` (`setfont`).
+- **`install.sh` removed** — Kite's original root-level installer, fully superseded
+  by the Docker pipeline (`entrypoint-assembler.sh`) and called from nowhere.
+  Removed while wiring up CI (it was the bulk of the shellcheck findings).
 
 **Candidates to audit (verify references, then remove if dead):**
 - **Remaining `settings/` files** — the obvious orphans are gone; a fresh grep of
   each `settings/*` against `entrypoint-assembler.sh` + `cs-update.sh` will catch
   any that fall out of use later.
-- **Root-level tools** — `install.sh`, `cs-configure.py`, and the `dpi-cloner/`,
-  `cs-tester/`, `kite-arduino/` dirs were not audited this round; verify each is
-  still referenced/useful before removing.
+- **Root-level tools** — `cs-configure.py` and the `dpi-cloner/`, `cs-tester/`,
+  `kite-arduino/` dirs were not audited this round; verify each is still
+  referenced/useful before removing.
 - **Stale comments** — several were updated this session; a sweep for others that
   no longer match the code (e.g. references to removed services) is worth it.
 

@@ -1,0 +1,205 @@
+# ============================================================================
+# dkms-build.yml — the important one.
+#
+# Cross-compiles BOTH out-of-tree kernel modules against a freshly prepared
+# Raspberry Pi kernel tree, exercising the SAME code path as an on-device DKMS
+# rebuild — so a kernel API change that would break WiFi/battery on the next
+# `apt full-upgrade` is caught here first.
+#
+#   * WiFi  (wifi-driver/): the rtl8723bs staging snapshot is assembled exactly
+#     like docker/scripts/build-wifi-module.sh (staging copy -> Kbuild, wrapper
+#     Makefile, compat.h + ccflags include, cfg80211-6.18 python patch) and built
+#     via the wrapper Makefile — identical to the DKMS MAKE line + cs-dkms-refresh
+#     shim step used on the device.
+#   * battery (battery-driver/): plain out-of-tree module via its own Makefile.
+#
+# Matrix (fail-fast: false):
+#   (a) role=pinned  -> KERNEL_BRANCH from build.sh (rpi-6.18.y). Failing means
+#       WE broke something -> the workflow goes RED.
+#   (b) role=newest  -> newest rpi-6.*.y branch on raspberrypi/linux (discovered
+#       with a single `git ls-remote`, no API pagination). Failing is an early
+#       warning that a FUTURE kernel needs new shims; per the task we do not want
+#       a permanently-red check, so this leg is continue-on-error and instead
+#       opens/updates a deduped GitHub issue with the compiler error excerpt.
+#
+# Caching: the prepared kernel tree is cached per (branch + HEAD sha), so
+# scheduled runs are fast when nothing changed. Only `modules_prepare` is run —
+# never a full kernel build (keeps scheduled cost low).
+# ============================================================================
+name: dkms-build
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'        # Mondays 06:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'wifi-driver/**'
+      - 'battery-driver/**'
+      - '.github/workflows/dkms-build.yml'
+
+permissions:
+  contents: read
+  issues: write                # (b) leg files/updates a compat issue on failure
+
+jobs:
+  setup:
+    name: resolve kernel matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: m
+        run: |
+          set -euo pipefail
+          PINNED="rpi-6.18.y"      # mirrors build.sh KERNEL_BRANCH default
+          newest=$(git ls-remote --heads https://github.com/raspberrypi/linux 'rpi-6.*.y' \
+            | sed 's#.*refs/heads/##' | sort -V | tail -1)
+          [ -n "$newest" ] || newest="$PINNED"
+          echo "pinned=$PINNED newest=$newest"
+          matrix=$(jq -cn --arg p "$PINNED" --arg n "$newest" '{include:[
+            {role:"pinned", branch:$p},
+            {role:"newest", branch:$n}
+          ]}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build modules (${{ matrix.role }} · ${{ matrix.branch }})
+    needs: setup
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.role == 'newest' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install cross toolchain + kernel prep deps
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu bc bison flex libssl-dev libelf-dev make rsync python3
+
+      - name: Resolve kernel HEAD sha (cache key)
+        id: ksha
+        run: |
+          set -euo pipefail
+          sha=$(git ls-remote https://github.com/raspberrypi/linux "refs/heads/${{ matrix.branch }}" | cut -f1)
+          [ -n "$sha" ] || { echo "branch ${{ matrix.branch }} not found"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Cache prepared kernel tree
+        id: kcache
+        uses: actions/cache@v6
+        with:
+          path: kernel
+          key: kernel-${{ matrix.branch }}-${{ steps.ksha.outputs.sha }}
+
+      - name: Prepare kernel tree (modules_prepare only)
+        if: steps.kcache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${{ matrix.branch }}" \
+            https://github.com/raspberrypi/linux kernel
+          cd kernel
+          # Mirror docker/scripts/build-kernel.sh: bcm2711_defconfig is the arm64
+          # base for all RPi arm64 boards; enable staging + rtl8723bs as a module.
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
+          ./scripts/config --enable CONFIG_STAGING
+          ./scripts/config --module CONFIG_RTL8723BS
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)" modules_prepare
+          rm -rf .git         # shrink the cached tree; sha is in the cache key
+
+      - name: Build rtl8723bs (WiFi) out-of-tree
+        run: |
+          set -euo pipefail
+          KTREE="$PWD/kernel"
+          STAGING="$KTREE/drivers/staging/rtl8723bs"
+          test -d "$STAGING" || { echo "drivers/staging/rtl8723bs missing in tree"; exit 1; }
+          # Assemble the DKMS source snapshot exactly like build-wifi-module.sh.
+          rm -rf wifi-build && mkdir -p wifi-build
+          rsync -a --exclude='*.ko' --exclude='*.o' --exclude='*.mod' \
+            --exclude='*.mod.c' --exclude='.tmp_versions' --exclude='Module.symvers' \
+            --exclude='modules.order' "$STAGING/" wifi-build/
+          mv wifi-build/Makefile wifi-build/Kbuild
+          cp wifi-driver/Makefile wifi-build/Makefile
+          cp wifi-driver/compat.h wifi-build/compat.h
+          # $(src) is a literal Make variable written into Kbuild, not a shell expansion.
+          # shellcheck disable=SC2016
+          grep -q 'compat.h' wifi-build/Kbuild || \
+            echo 'ccflags-y += -include $(src)/compat.h' >> wifi-build/Kbuild
+          python3 wifi-driver/patches/fix-cfg80211-6.18.py wifi-build/os_dep/ioctl_cfg80211.c
+          # Build via the wrapper Makefile == the on-device DKMS MAKE line
+          # (make KSRC=<build>), cross-compiled for arm64.
+          # KBUILD_MODPOST_WARN=1: modules_prepare (no full kernel build) produces no
+          # Module.symvers, so modpost can't resolve kernel symbols. We only verify
+          # the module COMPILES against the kernel API (the CC steps) — not that it
+          # links/loads — so downgrade the unresolved-symbol errors to warnings. A
+          # real API break still fails at compile time.
+          make -C wifi-build KSRC="$KTREE" KBUILD_MODPOST_WARN=1 \
+            ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- 2>&1 | tee dkms-wifi.log
+          test -f wifi-build/r8723bs.ko
+
+      - name: Build cs_battery out-of-tree
+        run: |
+          set -euo pipefail
+          KTREE="$PWD/kernel"
+          # Mirrors the battery dkms MAKE line: make KSRC=<build> (via its Makefile).
+          # KBUILD_MODPOST_WARN=1: no Module.symvers from modules_prepare — we only
+          # check the module compiles, not that it links (see the WiFi step).
+          make -C battery-driver KSRC="$KTREE" KBUILD_MODPOST_WARN=1 \
+            ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- 2>&1 | tee dkms-battery.log
+          test -f battery-driver/cs_battery.ko
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dkms-logs-${{ matrix.role }}-${{ matrix.branch }}
+          path: |
+            dkms-wifi.log
+            dkms-battery.log
+          if-no-files-found: ignore
+
+      - name: File / update compat issue (newest branch, on failure)
+        if: ${{ failure() && matrix.role == 'newest' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const branch = process.env.MATRIX_BRANCH;
+            const title = `compat: modules fail against ${branch}`;
+            let excerpt = '';
+            for (const f of ['dkms-wifi.log', 'dkms-battery.log']) {
+              try {
+                const lines = fs.readFileSync(f, 'utf8').split('\n');
+                excerpt += `\n### ${f} (tail)\n\`\`\`\n${lines.slice(-40).join('\n')}\n\`\`\`\n`;
+              } catch (e) { /* log may not exist if an earlier step failed */ }
+            }
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = `The out-of-tree driver build failed against \`${branch}\` `
+              + `(newest \`rpi-6.*.y\`). Early warning: a future kernel likely needs new `
+              + `compat shims — update \`wifi-driver/compat.h\` and/or `
+              + `\`wifi-driver/patches/\`.\n\nRun: ${runUrl}\n${excerpt}`;
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', per_page: 100,
+            });
+            const hit = open.data.find(i => i.title === title);
+            if (hit) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: hit.number, body,
+              });
+              core.notice(`Updated existing issue #${hit.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body,
+              });
+              core.notice(`Opened issue #${created.data.number}`);
+            }
+        env:
+          MATRIX_BRANCH: ${{ matrix.branch }}

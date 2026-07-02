@@ -101,7 +101,7 @@ tar xzf "$KERNEL_ARTIFACTS/modules.tar.gz" -C "$MNT_ROOT"
 # directory when extracting modules. Move the content back and restore it.
 if [ -d "$MNT_ROOT/lib" ] && [ ! -L "$MNT_ROOT/lib" ]; then
     cp -a "$MNT_ROOT/lib/." "$MNT_ROOT/usr/lib/"
-    rm -rf "$MNT_ROOT/lib"
+    rm -rf "${MNT_ROOT:?}/lib"
     ln -sf usr/lib "$MNT_ROOT/lib"
     echo "[assembler] Restored /lib -> usr/lib symlink (broken by tar)"
 fi
@@ -128,7 +128,7 @@ echo "[assembler] Running software configuration..."
 
 # Paths consumed by the inline software-config section below
 export IMG="$IMG_DST"
-export IMG_DIR="$(dirname "$IMG_DST")"
+IMG_DIR="$(dirname "$IMG_DST")"; export IMG_DIR
 export MNT_BOOT="$MNT_BOOT"
 export MNT_ROOT="$MNT_ROOT"
 
@@ -159,6 +159,8 @@ find "$MNT_ROOT/etc/netplan" -name '90-NM-*.yaml' -delete 2>/dev/null || true
 
 # Set pi user password and sudo directly — cloud-init does not update existing users,
 # and the pi user already exists in rpios-retropie.img from the retropie build.
+# Literal crypt(3) hash — must NOT be shell-expanded, single quotes are correct.
+# shellcheck disable=SC2016
 PI_HASH='$6$PgBUYJMZ/hp0yJ3/$KokEwM.wyRM9BKnzJs38Gz5s6a6M/LYfKhc3M2hWF7A2bajXZcqzhwTBWAs.ubUpLIIcL7bRuPyI/PGJDQZrJ.'
 if grep -q "^pi:" "$MNT_ROOT/etc/shadow" 2>/dev/null; then
     sed -i "s|^pi:[^:]*:|pi:${PI_HASH}:|" "$MNT_ROOT/etc/shadow"
@@ -254,9 +256,9 @@ rsync -a --delete \
     --exclude='build.log' \
     "$WORKSPACE/" "$BINDIR/"
 # Fix ownership — Docker runs as root so /home/pi and its contents need explicit chown.
-chown ${pi_uid}:${pi_gid} "$PIHOMEDIR"
+chown "${pi_uid}:${pi_gid}" "$PIHOMEDIR"
 chmod 755 "$PIHOMEDIR"
-chown -R ${pi_uid}:${pi_gid} "$BINDIR"
+chown -R "${pi_uid}:${pi_gid}" "$BINDIR"
 
 # RetroPie autostart trigger. EmulationStation is started from
 # /opt/retropie/configs/all/autostart.sh, which is launched by the pi user's
@@ -279,7 +281,7 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$SSH_CONNECTION" ]; then
     fi
 fi
 BASHPROFILE
-chown ${pi_uid}:${pi_gid} "$PIHOMEDIR/.bash_profile"
+chown "${pi_uid}:${pi_gid}" "$PIHOMEDIR/.bash_profile"
 chmod 644 "$PIHOMEDIR/.bash_profile"
 echo "[assembler] Created /home/pi/.bash_profile (RetroPie autostart trigger)"
 
@@ -642,7 +644,7 @@ for entry in "$BINDIR/settings/retropiemenu/"*.rp "$BINDIR/settings/retropiemenu
     chmod +x "$RETROPIEMENU/$(basename "$entry")"
 done
 shopt -u nullglob
-chown -R ${pi_uid}:${pi_gid} "$RETROPIEMENU" 2>/dev/null || true
+chown -R "${pi_uid}:${pi_gid}" "$RETROPIEMENU" 2>/dev/null || true
 
 # Friendly name/description/icon for the entries: install cs-menu-sync and run it
 # against the mounted image so the shipped gamelist already carries them (it also
@@ -658,8 +660,8 @@ CS_OWNER="" \
     bash "$MNT_ROOT/usr/local/bin/cs-menu-sync" \
     && echo "[assembler] Applied gamelist names/icons for cs-update" \
     || echo "[assembler] WARN: cs-menu-sync failed — entries will show by filename"
-chown -R ${pi_uid}:${pi_gid} "$MNT_ROOT/home/pi/.emulationstation" 2>/dev/null || true
-chown -R ${pi_uid}:${pi_gid} "$RETROPIEMENU" 2>/dev/null || true
+chown -R "${pi_uid}:${pi_gid}" "$MNT_ROOT/home/pi/.emulationstation" 2>/dev/null || true
+chown -R "${pi_uid}:${pi_gid}" "$RETROPIEMENU" 2>/dev/null || true
 echo "[assembler] Installed cs-update + ES 'RetroPie' menu entries"
 
 # Re-enable first-boot root partition expansion.
@@ -1143,6 +1145,8 @@ LOOPDEV=$(losetup --partscan --find --show "$IMG_DST")
 echo "[assembler] Loop device for shrink: $LOOPDEV"
 
 ROOT_PART="${LOOPDEV}p2"
+# Documents the boot partition device next to ROOT_PART; not used by the shrink.
+# shellcheck disable=SC2034
 BOOT_PART="${LOOPDEV}p1"
 
 # Must fsck before resize
@@ -1176,7 +1180,6 @@ losetup -d "$LOOPDEV"
 LOOPDEV=""
 truncate --size="$NEW_SIZE" "$IMG_DST"
 
-ORIG_MB=$(du -m "$IMG_DST" | cut -f1)
 echo "[assembler] Image shrunk to $(du -h "$IMG_DST" | cut -f1)"
 
 echo ""
