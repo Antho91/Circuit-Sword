@@ -1,0 +1,23 @@
+# Keep GitHub Actions up to date automatically.
+#
+# Dependabot opens a PR whenever an action we use publishes a newer version
+# (including the major bumps that move actions onto newer Node runtimes, which is
+# what silences the "Node 20 is deprecated" notice). This is the supported way to
+# "track latest" — pinning to @latest/@main is discouraged (unpinned = surprise
+# breakage + supply-chain risk); major tags like @v4 already track latest within
+# their major, and Dependabot proposes the cross-major bumps for review.
+#
+# Note: Dependabot reads this file from the default branch, so it activates once
+# ci-setup is merged to master.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

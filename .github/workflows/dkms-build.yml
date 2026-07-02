@@ -72,7 +72,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install cross toolchain + kernel prep deps
         run: |
@@ -91,7 +91,7 @@ jobs:
 
       - name: Cache prepared kernel tree
         id: kcache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: kernel
           key: kernel-${{ matrix.branch }}-${{ steps.ksha.outputs.sha }}
@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dkms-logs-${{ matrix.role }}-${{ matrix.branch }}
           path: |
@@ -158,7 +158,7 @@ jobs:
 
       - name: File / update compat issue (newest branch, on failure)
         if: ${{ failure() && matrix.role == 'newest' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
