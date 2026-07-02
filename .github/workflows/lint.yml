@@ -1,0 +1,57 @@
+# ============================================================================
+# lint.yml — static analysis for the shell-script surface (~45% of the repo)
+#
+# Purpose:
+#   * shellcheck EVERY tracked *.sh (discovered via `git ls-files`, never a
+#     hardcoded list — so new scripts are covered automatically).
+#   * actionlint the workflow files themselves (also runs shellcheck on the
+#     inline `run:` blocks, since shellcheck ships on ubuntu-latest).
+#
+# Policy: correctness-class findings (SC2086 quoting, SC2115, …) are fixed in
+# the scripts (each in its own commit); only noisy *stylistic* codes may be
+# muted, via .shellcheckrc at the repo root. See docs/CI.md.
+# ============================================================================
+name: lint
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck (all tracked *.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint every tracked shell script
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files '*.sh')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No shell scripts found — nothing to lint."; exit 0
+          fi
+          echo "Linting ${#files[@]} script(s):"
+          printf '  %s\n' "${files[@]}"
+          # .shellcheckrc at the repo root is picked up automatically.
+          shellcheck "${files[@]}"
+
+  actionlint:
+    name: actionlint (workflow YAML)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+
+      - name: Run actionlint
+        run: ./actionlint -color
