@@ -120,7 +120,9 @@ if [ -d "$WIFI_SRC" ]; then
     cp /opt/wifi-driver/dkms.conf  "$WIFI_OUTPUT/dkms.conf"
     cp /opt/wifi-driver/Makefile   "$WIFI_OUTPUT/Makefile"
     cp /opt/wifi-driver/compat.h   "$WIFI_OUTPUT/src/compat.h"
-    # Inject compat.h include into Kbuild for kernel 6.15+ API compat
+    # Inject compat.h include into Kbuild for kernel 6.15+ API compat.
+    # $(src) is a literal Make variable written into Kbuild, not a shell expansion.
+    # shellcheck disable=SC2016
     echo 'ccflags-y += -include $(src)/compat.h' >> "$WIFI_OUTPUT/src/Kbuild"
     # Write .kver so cs-dkms-setup.sh can detect when source needs refreshing
     echo "$KERNEL_BRANCH" | grep -o '[0-9]*\.[0-9]*' > "$WIFI_OUTPUT/src/.kver"

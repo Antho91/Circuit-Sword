@@ -96,6 +96,8 @@ cp /workspace/wifi-driver/Makefile  "$OUTPUT/src/Makefile"
 
 # Bundle compat.h for forward API compatibility across kernel versions.
 cp /workspace/wifi-driver/compat.h  "$OUTPUT/src/compat.h"
+# $(src) is a literal Make variable written into Kbuild, not a shell expansion.
+# shellcheck disable=SC2016
 grep -q 'compat.h' "$OUTPUT/src/Kbuild" \
     || echo 'ccflags-y += -include $(src)/compat.h' >> "$OUTPUT/src/Kbuild"
 
