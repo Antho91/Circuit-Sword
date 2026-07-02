@@ -1,11 +1,13 @@
 # ============================================================================
 # hud-build.yml — compile cs-hud on every change to cs-hud_new/
 #
-# Why arm64/Trixie: the target is a CM3 (arm64) running RPi OS Trixie, so the
-# compile env matches via docker/setup-qemu-action + a --platform linux/arm64
-# debian:trixie-slim container. Deps mirror docker/Dockerfile.hud
-# (libsdl2-dev, libsdl2-ttf-dev, libdrm-dev) PLUS pigpio built from source
-# (tag v79) — pigpio is not packaged in Debian and cs-hud links -lpigpio.
+# Why arm64/Trixie: the target is a CM3 (arm64) running RPi OS Trixie. The compile
+# runs inside a debian:trixie-slim container (userland parity with the shipped
+# image) on a NATIVE GitHub arm64 runner (ubuntu-24.04-arm) — no QEMU emulation,
+# so it is identical to the emulated build but much faster. Deps mirror
+# docker/Dockerfile.hud (libsdl2-dev, libsdl2-ttf-dev, libdrm-dev) PLUS pigpio
+# built from source (tag v79) — pigpio is not packaged in Debian and cs-hud links
+# -lpigpio.
 #
 # Differences from docker/Dockerfile.hud (documented per the task's "trust the
 # repo" rule): the docker HUD stage uses debian:bookworm-slim; CI uses Trixie to
@@ -20,8 +22,9 @@
 # error-free, and a follow-up step FAILS on a small curated set of high-signal
 # warning classes while surfacing any other warnings informationally.
 #
-# If the emulated arm64 build ever exceeds ~10 min, split: add a fast native
-# amd64 compile job for PRs and move this arm64 job to `schedule`.
+# Native arm64 runners are free for public repos. If this repo ever goes private
+# (arm64 minutes billed), switch back to ubuntu-latest + docker/setup-qemu-action
+# and a --platform linux/arm64 run — same container, just emulated/slower.
 # ============================================================================
 name: hud-build
 
@@ -41,14 +44,9 @@ permissions:
 jobs:
   build-arm64:
     name: build cs-hud (arm64, Debian Trixie)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm      # native arm64 — no QEMU
     steps:
       - uses: actions/checkout@v7
-
-      - name: Enable arm64 emulation
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
 
       - name: Compile in an arm64 Trixie container
         run: |
