@@ -1,0 +1,98 @@
+# ============================================================================
+# hud-build.yml — compile cs-hud on every change to cs-hud_new/
+#
+# Why arm64/Trixie: the target is a CM3 (arm64) running RPi OS Trixie, so the
+# compile env matches via docker/setup-qemu-action + a --platform linux/arm64
+# debian:trixie-slim container. Deps mirror docker/Dockerfile.hud
+# (libsdl2-dev, libsdl2-ttf-dev, libdrm-dev) PLUS pigpio built from source
+# (tag v79) — pigpio is not packaged in Debian and cs-hud links -lpigpio.
+#
+# Differences from docker/Dockerfile.hud (documented per the task's "trust the
+# repo" rule): the docker HUD stage uses debian:bookworm-slim; CI uses Trixie to
+# match the shipped image's userland.
+#
+# -Werror decision: NOT enforced globally. The cs-hud_new/Makefile already uses
+# -Wall -Wextra, and Trixie's gcc-14 hard-ERRORS the truly dangerous C classes
+# (implicit-function-declaration, incompatible-pointer-types, int-conversion) by
+# default — so the plain build already fails on real bugs. A blanket -Werror is
+# "probably too aggressive" (task) and risks failing on library-version warning
+# noise that differs from the bookworm build. Instead: the build must be
+# error-free, and a follow-up step FAILS on a small curated set of high-signal
+# warning classes while surfacing any other warnings informationally.
+#
+# If the emulated arm64 build ever exceeds ~10 min, split: add a fast native
+# amd64 compile job for PRs and move this arm64 job to `schedule`.
+# ============================================================================
+name: hud-build
+
+on:
+  push:
+    paths:
+      - 'cs-hud_new/**'
+      - '.github/workflows/hud-build.yml'
+  pull_request:
+    paths:
+      - 'cs-hud_new/**'
+      - '.github/workflows/hud-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64:
+    name: build cs-hud (arm64, Debian Trixie)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable arm64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Compile in an arm64 Trixie container
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD":/src -w /src debian:trixie-slim bash -euo pipefail -c '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                gcc make pkg-config \
+                libsdl2-dev libsdl2-ttf-dev libdrm-dev \
+                git ca-certificates
+              # pigpio: not in Debian, build from source (mirrors Dockerfile.hud).
+              git clone --depth 1 --branch v79 \
+                https://github.com/joan2937/pigpio.git /tmp/pigpio
+              make -C /tmp/pigpio -j"$(nproc)"
+              make -C /tmp/pigpio install
+              ldconfig
+              # Build (fails on compile errors; -Wall -Wextra from the Makefile).
+              make -C cs-hud_new clean
+              make -C cs-hud_new -j"$(nproc)" 2>&1 | tee /src/hud-build.log
+              test -x cs-hud_new/cs-hud
+            '
+
+      - name: Gate on high-signal warnings
+        run: |
+          set -euo pipefail
+          # These classes are near-certain real bugs. gcc-14 already errors most,
+          # but grep the captured log as defense-in-depth (and for older toolchains).
+          if grep -nE 'warning:.*(implicit declaration|incompatible pointer|makes integer from pointer|makes pointer from integer|-Wreturn-type|control reaches end of non-void)' hud-build.log; then
+            echo "::error::High-signal compiler warning(s) above indicate a real bug."
+            exit 1
+          fi
+          # Surface any remaining warnings without failing the build.
+          if grep -n 'warning:' hud-build.log; then
+            echo "::notice::Non-fatal compiler warnings above — review, not blocking."
+          else
+            echo "No compiler warnings."
+          fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hud-build-log
+          path: hud-build.log
+          if-no-files-found: ignore
