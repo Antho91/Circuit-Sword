@@ -60,7 +60,7 @@ exists() { #FILE
   
   file=$1
   
-  if [ -f $file ]; then
+  if [ -f "$file" ]; then
     echo "[i] FILE: [$file] exists."
     return 0
   else
@@ -76,7 +76,10 @@ existsdev() { #file
   fi
   
   file=$1
-  
+
+  # $file is deliberately unquoted: callers pass a device glob (e.g. /dev/ttyACM*)
+  # that must expand here.
+  # shellcheck disable=SC2086,SC2046
   if [ $(ls $file | wc -l) == 1 ] ; then
     echo "[i] FILE: [$file] exists."
     return 0
@@ -94,12 +97,11 @@ installed() { #BINARY
   
   file=$1
   
-  if [ $(which $file | wc -l) == 1 ] ; then
+  if [ "$(which "$file" | wc -l)" == 1 ] ; then
     echo "[i] BIN: [$file] exists."
     return 0
   else
     return 1
-    echo "[i] BIN: [$file] does not exist."
   fi
 }
 
