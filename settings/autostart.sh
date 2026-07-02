@@ -1,4 +1,5 @@
-# 
+# shellcheck shell=bash
+#
 # This file originates from Kite's Circuit Sword control board project.
 # Author: Kite (Giles Burgess)
 # 
@@ -66,7 +67,7 @@ if [ -f $CONFIGFILE ]; then
   fi
 
   if [[ "$CLONER" == "ON" ]] ; then
-    if [[ $(tvservice -s | grep LCD) ]] ; then
+    if tvservice -s | grep -q LCD ; then
       echo "Starting CLONER.."
       sudo systemctl start dpi-cloner.service
     fi
@@ -74,7 +75,7 @@ if [ -f $CONFIGFILE ]; then
 
   if [[ "$MODE" == "TESTER" && -n "$TESTER" ]] ; then
     echo "Starting TESTER.."
-    python $TESTER
+    python "$TESTER"
   elif [ "$MODE" == "SHELL" ] ; then
     echo "Starting SHELL.."
     exit 0
