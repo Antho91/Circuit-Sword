@@ -1,0 +1,17 @@
+# ShellCheck configuration for Circuit Sword. See docs/CI.md.
+#
+# Only NOISY / false-positive checks are muted here. Correctness-class findings
+# (SC2086 quoting, SC2046 word-splitting, SC2115 rm-safety, …) are FIXED in the
+# scripts, never disabled globally.
+
+# SC1090: several scripts source runtime-dynamic paths (e.g. RetroPie configs
+# from autostart.sh) that don't exist at lint time — not followable by design.
+disable=SC1090
+
+# SC2012: `ls` here runs on controlled, space-free paths; the `find` rewrite adds
+# noise without changing behavior.
+disable=SC2012
+
+# SC2015: the deliberate `cmd && action || true` idiom — C is the harmless `true`,
+# so the "A && B || C is not if-then-else" caution is a false positive throughout.
+disable=SC2015
